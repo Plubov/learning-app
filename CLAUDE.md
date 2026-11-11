@@ -56,5 +56,22 @@ works; do not add libraries or infrastructure without saying why.
 
 ## Commands
 
-To be filled in once the project is scaffolded (milestone M0):
-start dev server, run tests, run type check, apply migrations.
+Run from the repository root. Expo SDK 58; see `AGENTS.md` for Expo-specific
+guidance (always read the versioned Expo docs, not memory).
+
+- Install dependencies: `npm install` (after cloning or pulling package changes)
+- Add a package: `npx expo install <package>` (picks SDK-compatible versions)
+- Start dev server: `npx expo start` (press `w` for web; scan the QR code with
+  Expo Go on the phone; use `--tunnel` if the phone cannot reach the PC)
+- Type check: `npx tsc --noEmit`
+- Lint: `npx expo lint`
+- Check dependency versions: `npx expo-doctor`
+- Run tests: not set up yet (added in M1 with the scheduling logic)
+- New migration: `npx supabase migration new <name>` (creates a file in
+  `supabase/migrations/`)
+- Apply migrations to the cloud project: `npx supabase db push`
+  (one-time setup per machine: `npx supabase login`, then
+  `npx supabase link --project-ref <ref>`)
+
+Environment: copy `.env.example` to `.env` and fill in the Supabase URL and
+publishable key. Restart `npx expo start` after changing `.env`.
