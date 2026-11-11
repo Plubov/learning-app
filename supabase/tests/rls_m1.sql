@@ -86,7 +86,10 @@ begin
   insert into public.items (deck_id, kind, term, meaning)
   values (d, 'vocab', '사과', 'apple') returning id into i;
 
-  insert into public.cards (item_id, card_type) values (i, 'recognition') returning id into c;
+  -- The items trigger creates the cards (as B, through RLS).
+  select count(*) into n from public.cards where item_id = i;
+  if n <> 2 then raise exception 'FAIL: expected 2 cards for new item, found %', n; end if;
+  select id into c from public.cards where item_id = i and card_type = 'recognition';
 
   -- review_events: insert works, response needs a type, no update or delete.
   insert into public.review_events (card_id, item_id, rating, response, reviewed_at)
