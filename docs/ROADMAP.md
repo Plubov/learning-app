@@ -1,6 +1,6 @@
 # Roadmap
 
-Current milestone: M0
+Current milestone: M1
 
 ## M0 Setup (one or two evenings)
 
@@ -29,8 +29,8 @@ Project:
 
 ## M1 Review loop (target: daily Korean study starts here)
 
-- [ ] Sign up and log in
-- [ ] Tables: decks, items, cards, review_events, profiles, with RLS
+- [x] Sign up and log in
+- [x] Tables: decks, items, cards, review_events, profiles, with RLS
 - [ ] Add and edit items by hand; cards are created per item
 - [ ] Review screen: due cards, four rating buttons, FSRS scheduling
 - [ ] Recognition and production cards; typed Hangul answers checked
