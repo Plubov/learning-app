@@ -1,0 +1,2 @@
+-- Empty first migration (M0): verifies that the CLI can apply migrations
+-- to the linked cloud project. Tables start in M1.
