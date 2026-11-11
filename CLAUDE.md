@@ -67,11 +67,15 @@ guidance (always read the versioned Expo docs, not memory).
 - Lint: `npx expo lint`
 - Check dependency versions: `npx expo-doctor`
 - Run tests: not set up yet (added in M1 with the scheduling logic)
-- New migration: `npx supabase migration new <name>` (creates a file in
-  `supabase/migrations/`)
-- Apply migrations to the cloud project: `npx supabase db push`
-  (one-time setup per machine: `npx supabase login`, then
-  `npx supabase link --project-ref <ref>`)
+- New migration: `npx supabase migration new <name>` (creates an empty file in
+  `supabase/migrations/`; from a non-interactive shell add `< /dev/null`, or it
+  waits for SQL on stdin)
+- Apply migrations to the cloud project: `npx supabase db push --remote`
+  (CLI v3 targets a local Docker database unless `--remote` is given)
+- List applied migrations: `npx supabase migration list --remote`
+- One-time setup per machine: `npx supabase login`, then
+  `npx supabase link --project-ref kwyrtvjirgqzzxzdxpqu` (asks for the
+  database password)
 
 Environment: copy `.env.example` to `.env` and fill in the Supabase URL and
 publishable key. Restart `npx expo start` after changing `.env`.

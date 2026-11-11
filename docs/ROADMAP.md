@@ -10,21 +10,21 @@ On PC and laptop:
 
 Accounts (all free to start):
 - [ ] GitHub; create a private repository and clone it on both machines
-- [ ] Supabase Cloud; create one project in an EU region
+- [x] Supabase Cloud; create one project in an EU region
 - [ ] Expo account
 - [ ] One AI API account with a small prepaid credit (needed from M3)
 
 Project:
-- [ ] Copy `CLAUDE.md` and `docs/` into the repository
-- [ ] Scaffold the Expo app with TypeScript (`npx create-expo-app@latest`)
-- [ ] App starts in the browser and on the Pixel 7 via Expo Go
+- [x] Copy `CLAUDE.md` and `docs/` into the repository
+- [x] Scaffold the Expo app with TypeScript (`npx create-expo-app@latest`)
+- [x] App starts in the browser and on the Pixel 7 via Expo Go
       (if the Play Store version of Expo Go does not yet support the newest
       SDK, let Expo CLI install the matching version on the phone, or choose
       the previous SDK when `create-expo-app` asks)
 - [ ] App opens in Safari on the iPad Air (same Wi-Fi, dev server address)
-- [ ] Supabase CLI set up; first empty migration applied
-- [ ] `.env` with Supabase URL and public key; `.env` is in `.gitignore`
-- [ ] Fill in the Commands section of `CLAUDE.md`
+- [x] Supabase CLI set up; first empty migration applied
+- [x] `.env` with Supabase URL and public key; `.env` is in `.gitignore`
+- [x] Fill in the Commands section of `CLAUDE.md`
 - [ ] First commit pushed; pulled successfully on the second machine
 
 ## M1 Review loop (target: daily Korean study starts here)
