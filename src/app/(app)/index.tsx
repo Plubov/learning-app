@@ -21,9 +21,29 @@ export default function DecksScreen() {
   );
   const { data: decks, error, loading } = useFocusQuery(load);
 
+  // Cards due now, for the Review button (same filter as the review screen).
+  const loadDue = useCallback(
+    () =>
+      supabase
+        .from('cards')
+        .select('id')
+        .eq('suspended', false)
+        .in('card_type', ['recognition', 'production'])
+        .lte('due_at', new Date().toISOString()),
+    [],
+  );
+  const { data: dueCards } = useFocusQuery(loadDue);
+  const dueCount = dueCards?.length ?? 0;
+
   return (
     <Screen>
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
+
+      <Button
+        title={dueCount > 0 ? `Review (${dueCount} due)` : 'Nothing due'}
+        onPress={() => router.push('/review')}
+        disabled={dueCount === 0}
+      />
       {!loading && decks?.length === 0 && (
         <ThemedText themeColor="textSecondary">
           No decks yet. Create one to start adding words.
