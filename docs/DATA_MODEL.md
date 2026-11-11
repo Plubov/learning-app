@@ -55,20 +55,23 @@ One way of testing an item, with its own schedule.
 |---|---|---|
 | item_id | uuid | |
 | card_type | text | 'recognition', 'production', 'listening'; later 'writing' |
-| due | timestamptz | next review |
+| due_at | timestamptz | next review |
 | stability | float | FSRS |
+| stability_fast | float | FSRS-7 |
 | difficulty | float | FSRS |
-| scheduled_days | int | FSRS |
-| learning_steps | int | FSRS: position in the (re)learning steps |
+| scheduled_days | float | FSRS: interval in (fractional) days |
+| learning_step | int | FSRS: position in the (re)learning steps |
 | state | smallint | FSRS: 0 new, 1 learning, 2 review, 3 relearning |
+| schedule_status | text | FSRS: 'new', 'learning', 'review' |
 | reps | int | |
 | lapses | int | |
-| last_review | timestamptz null | |
+| last_review_at | timestamptz null | |
 | suspended | boolean | |
 
-The FSRS columns mirror the `Card` type of `ts-fsrs` 6.0.0. Recheck them
-when upgrading `ts-fsrs`.
-Unique on (item_id, card_type). Index on (user_id, due) for the "what is
+The FSRS columns mirror the card of `ts-fsrs` 6 `DefaultScheduler` (model
+FSRS-7), in snake_case; the card's `cardId` is the row's `id`. Conversion
+lives in `src/lib/scheduling.ts`. Recheck when upgrading `ts-fsrs`.
+Unique on (item_id, card_type). Index on (user_id, due_at) for the "what is
 due" query.
 
 ### exercises

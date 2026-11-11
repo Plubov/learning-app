@@ -19,15 +19,17 @@ export type Database = {
           card_type: string
           created_at: string
           difficulty: number
-          due: string
+          due_at: string
           id: string
           item_id: string
           lapses: number
-          last_review: string | null
-          learning_steps: number
+          last_review_at: string | null
+          learning_step: number
           reps: number
+          schedule_status: string
           scheduled_days: number
           stability: number
+          stability_fast: number
           state: number
           suspended: boolean
           updated_at: string
@@ -37,15 +39,17 @@ export type Database = {
           card_type: string
           created_at?: string
           difficulty?: number
-          due?: string
+          due_at?: string
           id?: string
           item_id: string
           lapses?: number
-          last_review?: string | null
-          learning_steps?: number
+          last_review_at?: string | null
+          learning_step?: number
           reps?: number
+          schedule_status?: string
           scheduled_days?: number
           stability?: number
+          stability_fast?: number
           state?: number
           suspended?: boolean
           updated_at?: string
@@ -55,15 +59,17 @@ export type Database = {
           card_type?: string
           created_at?: string
           difficulty?: number
-          due?: string
+          due_at?: string
           id?: string
           item_id?: string
           lapses?: number
-          last_review?: string | null
-          learning_steps?: number
+          last_review_at?: string | null
+          learning_step?: number
           reps?: number
+          schedule_status?: string
           scheduled_days?: number
           stability?: number
+          stability_fast?: number
           state?: number
           suspended?: boolean
           updated_at?: string
