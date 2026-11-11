@@ -66,7 +66,9 @@ guidance (always read the versioned Expo docs, not memory).
 - Type check: `npx tsc --noEmit`
 - Lint: `npx expo lint`
 - Check dependency versions: `npx expo-doctor`
-- Run tests: not set up yet (added in M1 with the scheduling logic)
+- Run unit tests: `npm test` (Jest with jest-expo; once) or `npm run test:watch`.
+  Test files are `*-test.ts` in `__tests__` folders next to the code, never
+  inside `src/app/` (every file there becomes a screen)
 - New migration: `npx supabase migration new <name>` (creates an empty file in
   `supabase/migrations/`; from a non-interactive shell add `< /dev/null`, or it
   waits for SQL on stdin)

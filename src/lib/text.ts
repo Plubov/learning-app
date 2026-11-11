@@ -7,6 +7,15 @@ export function cleanText(value: string): string {
   return value.normalize('NFC').trim();
 }
 
+/**
+ * Whether a typed answer matches the expected one. Both sides are cleaned,
+ * runs of whitespace count as one space, and Latin letters ignore case.
+ */
+export function answersMatch(typed: string, expected: string): boolean {
+  const canonical = (s: string) => cleanText(s).replace(/\s+/g, ' ').toLowerCase();
+  return canonical(typed) === canonical(expected);
+}
+
 /** Like cleanText, but an empty result becomes null (for optional fields). */
 export function cleanOptionalText(value: string): string | null {
   const cleaned = cleanText(value);
