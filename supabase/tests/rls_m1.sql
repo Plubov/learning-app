@@ -15,6 +15,8 @@ do $$
 declare
   a uuid;
   d uuid;
+  i uuid;
+  c uuid;
 begin
   select id into a from auth.users
   where id <> '00000000-0000-4000-8000-00000000000b'
@@ -25,6 +27,10 @@ begin
   insert into public.decks (user_id, name) values (a, 'RLS test deck of A') returning id into d;
   perform set_config('test.user_a', a::text, true);
   perform set_config('test.deck_a', d::text, true);
+  insert into public.items (user_id, deck_id, kind, term, meaning)
+  values (a, d, 'vocab', 'rls-test', 'x') returning id into i;
+  select id into c from public.cards where item_id = i limit 1;
+  perform set_config('test.card_a', c::text, true);
 
   if not exists (select 1 from public.profiles
                  where user_id = '00000000-0000-4000-8000-00000000000b') then
@@ -90,6 +96,41 @@ begin
   select count(*) into n from public.cards where item_id = i;
   if n <> 2 then raise exception 'FAIL: expected 2 cards for new item, found %', n; end if;
   select id into c from public.cards where item_id = i and card_type = 'recognition';
+
+  -- record_review updates the card, appends the event, marks the item introduced.
+  perform public.record_review(
+    p_card_id => c,
+    p_rating => 3::smallint,
+    p_reviewed_at => now(),
+    p_schedule => '{"due_at": "2030-01-02T00:00:00Z", "last_review_at": "2030-01-01T00:00:00Z",
+      "stability": 1.5, "stability_fast": 1.2, "difficulty": 5, "scheduled_days": 1,
+      "learning_step": 0, "state": 2, "schedule_status": "review", "reps": 1, "lapses": 0}'::jsonb,
+    p_correct => true,
+    p_response => '{"type": "text", "value": "apple"}'::jsonb
+  );
+  if not exists (select 1 from public.cards
+                 where id = c and state = 2 and reps = 1 and due_at = '2030-01-02T00:00:00Z') then
+    raise exception 'FAIL: record_review did not update the card';
+  end if;
+  select count(*) into n from public.review_events where card_id = c and item_id = i;
+  if n <> 1 then raise exception 'FAIL: record_review wrote % events, expected 1', n; end if;
+  if exists (select 1 from public.items where id = i and introduced_at is null) then
+    raise exception 'FAIL: record_review did not mark the item introduced';
+  end if;
+
+  -- B cannot review the card of A.
+  begin
+    perform public.record_review(
+      p_card_id => current_setting('test.card_a')::uuid,
+      p_rating => 3::smallint,
+      p_reviewed_at => now(),
+      p_schedule => '{"due_at": "2030-01-02T00:00:00Z", "stability": 1, "stability_fast": 1,
+        "difficulty": 5, "scheduled_days": 1, "learning_step": 0, "state": 2,
+        "schedule_status": "review", "reps": 1, "lapses": 0}'::jsonb
+    );
+    raise exception 'FAIL: B reviewed the card of A';
+  exception when no_data_found then null;
+  end;
 
   -- review_events: insert works, response needs a type, no update or delete.
   insert into public.review_events (card_id, item_id, rating, response, reviewed_at)

@@ -114,6 +114,11 @@ UPDATE or DELETE privilege on it. Rows only disappear by cascade when the
 whole account is deleted.
 An exercise with three items writes three rows.
 
+Card reviews are saved through the database function `record_review`, which
+in one transaction updates the card's schedule, appends the event and sets
+`items.introduced_at` on the first review. The app does not write these
+three separately.
+
 ### drawings (handwriting phase; not created before then)
 
 | column | type | note |

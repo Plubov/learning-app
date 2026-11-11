@@ -263,7 +263,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      record_review: {
+        Args: {
+          p_card_id: string
+          p_correct?: boolean
+          p_device_id?: string
+          p_duration_ms?: number
+          p_rating: number
+          p_response?: Json
+          p_reviewed_at: string
+          p_schedule: Json
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
