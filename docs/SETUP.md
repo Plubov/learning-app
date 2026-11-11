@@ -1,7 +1,7 @@
 # Setting up a new machine
 
 Steps to get the project running on a second computer (e.g. the laptop).
-Written for Windows; Mac differences are noted. Takes about 30 minutes.
+Written for Windows. Takes about 30 minutes.
 When done, tick "pulled successfully on the second machine" in `ROADMAP.md`.
 
 ## 1. Install the tools
@@ -60,7 +60,7 @@ its own copy.
 copy .env.example .env
 ```
 
-(Mac: `cp .env.example .env`.) Open `.env` and fill in:
+Open `.env` and fill in:
 
 - `EXPO_PUBLIC_SUPABASE_URL=https://kwyrtvjirgqzzxzdxpqu.supabase.co`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=` the key starting with
