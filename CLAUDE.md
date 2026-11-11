@@ -79,3 +79,5 @@ guidance (always read the versioned Expo docs, not memory).
 
 Environment: copy `.env.example` to `.env` and fill in the Supabase URL and
 publishable key. Restart `npx expo start` after changing `.env`.
+
+Setting up another computer: see `docs/SETUP.md`.
