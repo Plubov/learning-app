@@ -31,11 +31,11 @@ Project:
 
 - [x] Sign up and log in
 - [x] Tables: decks, items, cards, review_events, profiles, with RLS
-- [ ] Add and edit items by hand; cards are created per item
+- [x] Add and edit items by hand; cards are created per item
 - [ ] Review screen: due cards, four rating buttons, FSRS scheduling
 - [ ] Recognition and production cards; typed Hangul answers checked
 - [ ] Same state on phone and browser
-- [ ] Unit tests for scheduling and answer comparison
+- [x] Unit tests for scheduling and answer comparison
 
 ## M2 Import and audio
 
