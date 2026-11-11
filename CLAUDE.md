@@ -73,6 +73,10 @@ guidance (always read the versioned Expo docs, not memory).
 - Apply migrations to the cloud project: `npx supabase db push --remote`
   (CLI v3 targets a local Docker database unless `--remote` is given)
 - List applied migrations: `npx supabase migration list --remote`
+- Database security checks (run after every migration):
+  `npx supabase db query --remote -f supabase/tests/rls_m1.sql` (runs in a
+  transaction that is rolled back; prints "all RLS checks passed") and
+  `npx supabase db advisors --remote`
 - One-time setup per machine: `npx supabase login`, then
   `npx supabase link --project-ref kwyrtvjirgqzzxzdxpqu` (asks for the
   database password)

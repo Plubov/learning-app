@@ -4,9 +4,18 @@ Status: draft 1, 2026-11-11. Postgres (Supabase).
 
 Conventions for every table:
 - `id uuid primary key default gen_random_uuid()`
-- `user_id uuid not null references auth.users` (owner)
-- `created_at timestamptz default now()`, `updated_at timestamptz`
+- `user_id uuid not null default auth.uid() references auth.users on delete cascade`
+  (owner; filled in by the database, the app does not send it)
+- `created_at timestamptz default now()`, `updated_at timestamptz` (kept
+  current by the `set_updated_at` trigger)
 - Row Level Security on; policy: `auth.uid() = user_id` for all operations
+- A child row references its parent as `(parent_id, user_id)`, so it can only
+  point at a row of the same user (plain foreign keys bypass RLS)
+- Learner-facing text must be NFC-normalised; the database rejects other
+  input (`term is nfc normalized`)
+
+Exceptions: `profiles` uses `user_id` as primary key (one row per user);
+`review_events` has no `updated_at` (rows never change).
 
 ## Content
 
@@ -49,15 +58,18 @@ One way of testing an item, with its own schedule.
 | due | timestamptz | next review |
 | stability | float | FSRS |
 | difficulty | float | FSRS |
-| state | smallint | FSRS: new, learning, review, relearning |
+| scheduled_days | int | FSRS |
+| learning_steps | int | FSRS: position in the (re)learning steps |
+| state | smallint | FSRS: 0 new, 1 learning, 2 review, 3 relearning |
 | reps | int | |
 | lapses | int | |
 | last_review | timestamptz null | |
 | suspended | boolean | |
 
-The FSRS columns mirror the card object of `ts-fsrs`; check the installed
-version for the exact field list before writing the migration.
-Index on (user_id, due) for the "what is due" query.
+The FSRS columns mirror the `Card` type of `ts-fsrs` 6.0.0. Recheck them
+when upgrading `ts-fsrs`.
+Unique on (item_id, card_type). Index on (user_id, due) for the "what is
+due" query.
 
 ### exercises
 A task touching several items.
@@ -84,17 +96,19 @@ Pasted text, imports, later uploaded files.
 
 | column | type | note |
 |---|---|---|
-| card_id | uuid null | set for card reviews |
-| exercise_id | uuid null | set for exercises |
+| card_id | uuid | set for card reviews (not null until exercises exist) |
+| exercise_id | uuid null | set for exercises; column added in M4 |
 | item_id | uuid | one row per item involved |
 | rating | smallint | 1 again, 2 hard, 3 good, 4 easy |
-| correct | boolean | |
+| correct | boolean null | null when the answer was not checked automatically |
 | response | jsonb null | `{"type":"text","value":"..."}` now; later `{"type":"drawing","drawing_id":"..."}` |
 | duration_ms | int | |
 | reviewed_at | timestamptz | time on the device |
 | device_id | text | for sync debugging |
 
-No update or delete policy exists for this table.
+No update or delete policy exists for this table, and the API roles have no
+UPDATE or DELETE privilege on it. Rows only disappear by cascade when the
+whole account is deleted.
 An exercise with three items writes three rows.
 
 ### drawings (handwriting phase; not created before then)
@@ -142,8 +156,10 @@ One row per AI call: `connection_id`, `task` ('generate_items',
 ## Profile
 
 ### profiles
-`display_name`, `timezone`, `reminder_time`, `daily_goal`,
-`push_token` null.
+`user_id` (primary key), `display_name`, `timezone` (IANA name, default
+'UTC'), `reminder_time`, `daily_goal`, `push_token` null.
+Created automatically for each new user by the `on_auth_user_created`
+trigger.
 
 ## Open questions
 
