@@ -42,7 +42,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "db:types": "supabase gen types --remote --schema public > src/lib/database.types.ts"
   },
   "private": true
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/button';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -48,10 +50,6 @@ export default function SignInScreen() {
   }
 
   const canSubmit = email.trim() !== '' && password !== '' && !busy;
-  const inputStyle = [
-    styles.input,
-    { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundElement },
-  ];
 
   return (
     <ThemedView style={styles.container}>
@@ -59,10 +57,8 @@ export default function SignInScreen() {
         <View style={styles.form}>
           <ThemedText type="subtitle">Learning App</ThemedText>
 
-          <TextInput
-            style={inputStyle}
+          <TextField
             placeholder="Email"
-            placeholderTextColor={theme.textSecondary}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -70,10 +66,8 @@ export default function SignInScreen() {
             keyboardType="email-address"
             inputMode="email"
           />
-          <TextInput
-            style={inputStyle}
+          <TextField
             placeholder="Password"
-            placeholderTextColor={theme.textSecondary}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -90,32 +84,13 @@ export default function SignInScreen() {
             </ThemedText>
           )}
 
-          <Pressable
-            onPress={signIn}
-            disabled={!canSubmit}
-            style={({ pressed }) => [
-              styles.button,
-              { backgroundColor: theme.tint },
-              (!canSubmit || pressed) && styles.dimmed,
-            ]}>
-            {busy ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <ThemedText style={styles.primaryText}>Sign in</ThemedText>
-            )}
-          </Pressable>
-
-          <Pressable
+          <Button title="Sign in" onPress={signIn} disabled={!canSubmit} busy={busy} />
+          <Button
+            title="Create account"
+            variant="secondary"
             onPress={signUp}
             disabled={!canSubmit}
-            style={({ pressed }) => [
-              styles.button,
-              styles.secondaryButton,
-              { borderColor: theme.border },
-              (!canSubmit || pressed) && styles.dimmed,
-            ]}>
-            <ThemedText>Create account</ThemedText>
-          </Pressable>
+          />
         </View>
       </SafeAreaView>
     </ThemedView>
@@ -126,19 +101,4 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1, padding: Spacing.four, alignItems: 'center', justifyContent: 'center' },
   form: { width: '100%', maxWidth: MaxContentWidth / 2, gap: Spacing.three },
-  input: {
-    borderWidth: 1,
-    borderRadius: Spacing.two,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
-  },
-  button: {
-    borderRadius: Spacing.two,
-    paddingVertical: Spacing.two + Spacing.one,
-    alignItems: 'center',
-  },
-  secondaryButton: { borderWidth: 1 },
-  primaryText: { color: '#ffffff', fontWeight: 600 },
-  dimmed: { opacity: 0.5 },
 });

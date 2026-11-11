@@ -72,6 +72,8 @@ guidance (always read the versioned Expo docs, not memory).
   waits for SQL on stdin)
 - Apply migrations to the cloud project: `npx supabase db push --remote`
   (CLI v3 targets a local Docker database unless `--remote` is given)
+- Regenerate database types after a migration: `npm run db:types`
+  (writes `src/lib/database.types.ts`; never edit that file by hand)
 - List applied migrations: `npx supabase migration list --remote`
 - Database security checks (run after every migration):
   `npx supabase db query --remote -f supabase/tests/rls_m1.sql` (runs in a

@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
+import type { Database } from '@/lib/database.types';
+
 // Expo copies EXPO_PUBLIC_* variables from .env into the app at build time.
 // They must be read as written here (process.env.NAME), not dynamically.
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -15,7 +17,8 @@ if (!supabaseUrl || !supabasePublishableKey) {
 }
 
 /** The one Supabase client the whole app shares. */
-export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+// <Database> makes every query typed from the generated schema types.
+export const supabase = createClient<Database>(supabaseUrl, supabasePublishableKey, {
   auth: {
     // On the web supabase-js keeps the session in localStorage by itself
     // (and in memory during server-side builds). Phones have no localStorage,
