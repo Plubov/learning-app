@@ -1,6 +1,6 @@
 # Roadmap
 
-Current milestone: M1
+Current milestone: M2
 
 ## M0 Setup (one or two evenings)
 
@@ -34,7 +34,7 @@ Project:
 - [x] Add and edit items by hand; cards are created per item
 - [x] Review screen: due cards, four rating buttons, FSRS scheduling
 - [x] Recognition and production cards; typed Hangul answers checked
-- [ ] Same state on phone and browser
+- [x] Same state on phone and browser
 - [x] Unit tests for scheduling and answer comparison
 
 ## M2 Import and audio
