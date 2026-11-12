@@ -179,6 +179,10 @@ begin
   select count(*) into n from public.cards c join public.items i on i.id = c.item_id
   where i.term = '물';
   if n <> 2 then raise exception 'FAIL: imported item has % cards, expected 2', n; end if;
+  if (select created_at from public.items where term = '물' and deck_id = d)
+     >= (select created_at from public.items where term = '차' and deck_id = d) then
+    raise exception 'FAIL: imported items do not keep the file order';
+  end if;
 
   -- import_items into the deck of A fails completely (no source left behind).
   begin
