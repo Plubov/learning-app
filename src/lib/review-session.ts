@@ -29,3 +29,50 @@ export function spreadSiblings<T extends { item_id: string }>(cards: readonly T[
   }
   return result;
 }
+
+/** Local midnight of the given moment: "today" for the daily new-word limit. */
+export function startOfLocalDay(now: Date): Date {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+/**
+ * How many new items a deck may still introduce now: its daily limit minus
+ * the items already introduced today, plus any extra the learner asked for
+ * ("study more").
+ */
+export function newItemAllowance(newPerDay: number, introducedToday: number, extra: number): number {
+  return Math.max(0, newPerDay - introducedToday) + Math.max(0, extra);
+}
+
+/**
+ * The new items to show, in the given order (oldest first), taking at most
+ * `allowance[deck_id]` items from each deck.
+ */
+export function pickNewItems<T extends { deck_id: string }>(
+  newItems: readonly T[],
+  allowance: Readonly<Record<string, number>>,
+): T[] {
+  const taken: Record<string, number> = {};
+  return newItems.filter((item) => {
+    const count = taken[item.deck_id] ?? 0;
+    if (count >= (allowance[item.deck_id] ?? 0)) return false;
+    taken[item.deck_id] = count + 1;
+    return true;
+  });
+}
+
+/**
+ * Session order: due reviews first (as given), then the new items'
+ * recognition cards, then their production cards, so a new word is seen
+ * before it has to be typed.
+ */
+export function orderSession<T extends { card_type: string }>(
+  reviewCards: readonly T[],
+  newCards: readonly T[],
+): T[] {
+  return [
+    ...reviewCards,
+    ...newCards.filter((c) => c.card_type === 'recognition'),
+    ...newCards.filter((c) => c.card_type !== 'recognition'),
+  ];
+}

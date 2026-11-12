@@ -29,6 +29,13 @@ A collection the user studies, e.g. "Korean".
 | target_lang | text | e.g. 'ko'; null for non-language decks |
 | new_per_day | int | cap on new items per day |
 
+Daily limit: an item counts as introduced on the first review of any of its
+cards (`items.introduced_at`). A session shows the due cards of introduced
+items, plus the cards of the oldest not-yet-introduced items, up to
+`new_per_day` minus the items introduced since local midnight. "Learn more"
+in the app adds 10 items beyond that for the current session. Imports keep
+the file order through `created_at`.
+
 ### items
 The unit of knowledge.
 

@@ -9,6 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
+import { loadSessionCards } from '@/lib/session-cards';
 import { useSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 
@@ -21,28 +22,30 @@ export default function DecksScreen() {
   );
   const { data: decks, error, loading } = useFocusQuery(load);
 
-  // Cards due now, for the Review button (same filter as the review screen).
+  // Cards in today's session (due reviews plus new words within the daily
+  // limit), loaded exactly like the review screen does.
   const loadDue = useCallback(
     () =>
-      supabase
-        .from('cards')
-        .select('id')
-        .eq('suspended', false)
-        .in('card_type', ['recognition', 'production'])
-        .lte('due_at', new Date().toISOString()),
+      loadSessionCards(0).then(
+        (session) => ({ data: session, error: null }),
+        (reason: unknown) => ({ data: null, error: { message: String(reason) } }),
+      ),
     [],
   );
-  const { data: dueCards } = useFocusQuery(loadDue);
-  const dueCount = dueCards?.length ?? 0;
+  const { data: today } = useFocusQuery(loadDue);
+  const dueCount = today?.cards.length ?? 0;
+  let reviewTitle = 'Nothing due';
+  if (dueCount > 0) reviewTitle = `Review (${dueCount} due)`;
+  else if (today?.moreNewAvailable) reviewTitle = 'Learn more new words';
 
   return (
     <Screen>
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
       <Button
-        title={dueCount > 0 ? `Review (${dueCount} due)` : 'Nothing due'}
+        title={reviewTitle}
         onPress={() => router.push('/review')}
-        disabled={dueCount === 0}
+        disabled={dueCount === 0 && !today?.moreNewAvailable}
       />
       {!loading && decks?.length === 0 && (
         <ThemedText themeColor="textSecondary">

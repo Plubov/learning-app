@@ -10,31 +10,24 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { getDeviceId } from '@/lib/device-id';
-import { isDueInSession, spreadSiblings } from '@/lib/review-session';
+import { isDueInSession } from '@/lib/review-session';
 import {
   createScheduler,
   formatInterval,
   previewIntervals,
   REVIEW_RATINGS,
   reviewCard,
-  type CardRow,
   type ReviewRating,
   type Scheduler,
 } from '@/lib/scheduling';
+import { loadSessionCards, type SessionCard } from '@/lib/session-cards';
 import { getAutoplay, setAutoplay, speakKorean, stopSpeaking } from '@/lib/speech';
 import { supabase } from '@/lib/supabase';
 import { answersMatch, cleanText } from '@/lib/text';
 
-/** Card types this screen can show (listening and writing come later). */
-const CARD_TYPES = ['recognition', 'production'];
-const SESSION_LIMIT = 100;
 const RATING_LABELS: Record<ReviewRating, string> = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' };
-
-type SessionCard = CardRow & {
-  card_type: string;
-  item_id: string;
-  item: { term: string; meaning: string; notes: string | null };
-};
+/** New words per deck added by "Learn more", beyond today's limit. */
+const STUDY_MORE_COUNT = 10;
 
 /** What is known once the answer side is showing. */
 type Revealed = {
@@ -42,22 +35,6 @@ type Revealed = {
   /** Production cards only: what was typed and whether it matched. */
   typed: { value: string; correct: boolean } | null;
 };
-
-function loadDueCards() {
-  return supabase
-    .from('cards')
-    .select(
-      'id, item_id, card_type, due_at, stability, stability_fast, difficulty, scheduled_days, ' +
-        'learning_step, state, schedule_status, reps, lapses, last_review_at, ' +
-        'item:items(term, meaning, notes)',
-    )
-    .eq('suspended', false)
-    .in('card_type', CARD_TYPES)
-    .lte('due_at', new Date().toISOString())
-    .order('due_at')
-    .limit(SESSION_LIMIT)
-    .overrideTypes<SessionCard[], { merge: false }>();
-}
 
 export default function ReviewScreen() {
   const theme = useTheme();
@@ -70,6 +47,10 @@ export default function ReviewScreen() {
   const [saving, setSaving] = useState(false);
   const [doneCount, setDoneCount] = useState(0);
   const [autoplay, setAutoplayState] = useState<boolean | null>(null); // null = loading
+  // 0 = today's limit only; STUDY_MORE_COUNT after "Learn more".
+  const [extraNew, setExtraNew] = useState(0);
+  const [loadNumber, setLoadNumber] = useState(0); // increased to reload the queue
+  const [moreNewAvailable, setMoreNewAvailable] = useState(false);
 
   useEffect(() => {
     getAutoplay().then(setAutoplayState, () => setAutoplayState(true));
@@ -97,25 +78,31 @@ export default function ReviewScreen() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([createScheduler(), loadDueCards()]).then(
-      ([newScheduler, { data, error }]) => {
+    Promise.all([createScheduler(), loadSessionCards(extraNew)]).then(
+      ([newScheduler, session]) => {
         if (!active) return;
-        if (error) {
-          setError(error.message);
-          return;
-        }
         setScheduler(newScheduler);
-        setQueue(spreadSiblings(data));
+        setQueue(session.cards);
+        setMoreNewAvailable(session.moreNewAvailable);
         setShownAt(new Date().getTime());
       },
       (reason: unknown) => {
-        if (active) setError(String(reason));
+        if (active) setError(reason instanceof Error ? reason.message : String(reason));
       },
     );
     return () => {
       active = false;
     };
-  }, []);
+  }, [extraNew, loadNumber]);
+
+  function studyMore() {
+    setQueue(null); // shows "Loading…" while the next words are fetched
+    setError(null);
+    // Each press asks for STUDY_MORE_COUNT words beyond those introduced so
+    // far today (the ones just learned already count as introduced).
+    setExtraNew(STUDY_MORE_COUNT);
+    setLoadNumber((n) => n + 1);
+  }
 
   if (error && !queue) {
     return (
@@ -139,8 +126,16 @@ export default function ReviewScreen() {
         <ThemedText type="subtitle">Done for now</ThemedText>
         <ThemedText themeColor="textSecondary">
           {doneCount === 0 ? 'No cards are due.' : `You reviewed ${doneCount} cards.`}
+          {moreNewAvailable && ' Today’s new words are done.'}
         </ThemedText>
-        <Button title="Back to decks" onPress={() => router.back()} />
+        {moreNewAvailable && (
+          <Button title={`Learn ${STUDY_MORE_COUNT} more new words`} onPress={studyMore} />
+        )}
+        <Button
+          title="Back to decks"
+          variant={moreNewAvailable ? 'secondary' : 'primary'}
+          onPress={() => router.back()}
+        />
       </Screen>
     );
   }
