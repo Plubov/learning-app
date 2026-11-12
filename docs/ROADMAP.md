@@ -32,8 +32,8 @@ Project:
 - [x] Sign up and log in
 - [x] Tables: decks, items, cards, review_events, profiles, with RLS
 - [x] Add and edit items by hand; cards are created per item
-- [ ] Review screen: due cards, four rating buttons, FSRS scheduling
-- [ ] Recognition and production cards; typed Hangul answers checked
+- [x] Review screen: due cards, four rating buttons, FSRS scheduling
+- [x] Recognition and production cards; typed Hangul answers checked
 - [ ] Same state on phone and browser
 - [x] Unit tests for scheduling and answer comparison
 
