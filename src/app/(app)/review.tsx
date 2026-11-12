@@ -21,6 +21,7 @@ import {
   type ReviewRating,
   type Scheduler,
 } from '@/lib/scheduling';
+import { getAutoplay, setAutoplay, speakKorean, stopSpeaking } from '@/lib/speech';
 import { supabase } from '@/lib/supabase';
 import { answersMatch, cleanText } from '@/lib/text';
 
@@ -68,6 +69,31 @@ export default function ReviewScreen() {
   const [shownAt, setShownAt] = useState(0); // when the current card appeared
   const [saving, setSaving] = useState(false);
   const [doneCount, setDoneCount] = useState(0);
+  const [autoplay, setAutoplayState] = useState<boolean | null>(null); // null = loading
+
+  useEffect(() => {
+    getAutoplay().then(setAutoplayState, () => setAutoplayState(true));
+    return () => {
+      stopSpeaking(); // no voice after leaving the screen
+    };
+  }, []);
+
+  // Korean is on screen: the front of a recognition card, or a production
+  // card after "Check". Read it aloud once each time that happens.
+  const current = queue?.[0];
+  const koreanShown =
+    current !== undefined && (current.card_type !== 'production' || revealed !== null);
+  const currentTerm = current?.item.term;
+  useEffect(() => {
+    if (autoplay && koreanShown && currentTerm) speakKorean(currentTerm);
+  }, [autoplay, koreanShown, currentTerm, shownAt]);
+
+  function toggleAutoplay() {
+    const next = !autoplay;
+    setAutoplayState(next);
+    setAutoplay(next);
+    if (!next) stopSpeaking();
+  }
 
   useEffect(() => {
     let active = true;
@@ -121,6 +147,17 @@ export default function ReviewScreen() {
 
   const isProduction = card.card_type === 'production';
 
+  const listenButton = (
+    <Pressable
+      onPress={() => speakKorean(card.item.term)}
+      accessibilityRole="button"
+      accessibilityLabel="Listen"
+      hitSlop={Spacing.two}
+      style={({ pressed }) => pressed && styles.dimmed}>
+      <ThemedText style={styles.listen}>🔊</ThemedText>
+    </Pressable>
+  );
+
   function reveal() {
     if (!scheduler || !card) return;
     setRevealed({
@@ -168,14 +205,24 @@ export default function ReviewScreen() {
 
   return (
     <Screen>
-      <ThemedText type="small" themeColor="textSecondary">
-        {queue.length} left · {isProduction ? 'Type it in Korean' : 'What does it mean?'}
-      </ThemedText>
+      <View style={styles.topRow}>
+        <ThemedText type="small" themeColor="textSecondary">
+          {queue.length} left · {isProduction ? 'Type it in Korean' : 'What does it mean?'}
+        </ThemedText>
+        {autoplay !== null && (
+          <Pressable onPress={toggleAutoplay} accessibilityRole="button" hitSlop={Spacing.two}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {autoplay ? 'Auto sound: on' : 'Auto sound: off'}
+            </ThemedText>
+          </Pressable>
+        )}
+      </View>
 
       <ThemedView type="backgroundElement" style={styles.card}>
         <ThemedText style={styles.prompt}>
           {isProduction ? card.item.meaning : card.item.term}
         </ThemedText>
+        {!isProduction && listenButton}
 
         {revealed && (
           <>
@@ -183,6 +230,7 @@ export default function ReviewScreen() {
             <ThemedText style={styles.prompt}>
               {isProduction ? card.item.term : card.item.meaning}
             </ThemedText>
+            {isProduction && listenButton}
             {revealed.typed && (
               <ThemedText
                 style={{ color: revealed.typed.correct ? theme.tint : theme.danger }}>
@@ -254,6 +302,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.three,
   },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  listen: { fontSize: 28, lineHeight: 36 },
   prompt: { fontSize: 32, lineHeight: 44, textAlign: 'center' },
   divider: { height: 1, alignSelf: 'stretch' },
   notes: { textAlign: 'center' },
