@@ -1,4 +1,4 @@
-import { answersMatch, cleanOptionalText, cleanText } from '@/lib/text';
+import { acceptedAnswers, answersMatch, cleanOptionalText, cleanText } from '@/lib/text';
 
 // 사과 (apple) written as separate jamo letters (NFD) instead of syllables (NFC).
 const APPLE_NFC = '사과';
@@ -66,5 +66,50 @@ describe('answersMatch', () => {
 
   test('an empty answer does not match', () => {
     expect(answersMatch('', '사과')).toBe(false);
+  });
+});
+
+describe('answersMatch with alternatives', () => {
+  test('either side of a slash is accepted, and both together', () => {
+    expect(answersMatch('정말', '정말 / 진짜')).toBe(true);
+    expect(answersMatch('진짜', '정말 / 진짜')).toBe(true);
+    expect(answersMatch('정말 / 진짜', '정말 / 진짜')).toBe(true);
+    expect(answersMatch('정말/진짜', '정말 / 진짜')).toBe(true);
+  });
+
+  test('a part of one alternative is not enough', () => {
+    expect(answersMatch('정', '정말 / 진짜')).toBe(false);
+    expect(answersMatch('정말 진짜', '정말 / 진짜')).toBe(false);
+  });
+
+  test('a bracketed addition may be left out', () => {
+    expect(answersMatch('덥다', '덥다 (더워요)')).toBe(true);
+    expect(answersMatch('덥다 (더워요)', '덥다 (더워요)')).toBe(true);
+    expect(answersMatch('더워요', '덥다 (더워요)')).toBe(false);
+  });
+
+  test('an optional bracketed word in front may be left out or typed', () => {
+    expect(answersMatch('반가워요', '(만나서) 반가워요')).toBe(true);
+    expect(answersMatch('만나서 반가워요', '(만나서) 반가워요')).toBe(true);
+  });
+
+  test('a placeholder accepts any name', () => {
+    expect(answersMatch('저는 카를로스입니다', '저는 [Name]입니다')).toBe(true);
+    expect(answersMatch('저는 [Name]입니다', '저는 [Name]입니다')).toBe(true);
+    expect(answersMatch('저는 입니다', '저는 [Name]입니다')).toBe(false);
+  });
+
+  test('NFD input still matches an alternative', () => {
+    expect(answersMatch('진짜'.normalize('NFD'), '정말 / 진짜')).toBe(true);
+  });
+});
+
+describe('acceptedAnswers', () => {
+  test('a plain term accepts only itself', () => {
+    expect(acceptedAnswers('사과')).toEqual(['사과']);
+  });
+
+  test('lists the whole term and each alternative', () => {
+    expect(acceptedAnswers('아래 / 밑')).toEqual(['아래 / 밑', '아래', '밑']);
   });
 });
