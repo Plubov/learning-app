@@ -39,9 +39,12 @@ Project:
 
 ## M2 Import and audio
 
-- [ ] Import from a RemNote export file
-- [ ] Listening cards with device text-to-speech
-- [ ] Daily cap for new items; simple statistics screen
+- [x] Import from a RemNote export file
+- [x] Learning order for new words: topics mixed, phrases after their words
+- [x] Korean read aloud with device text-to-speech
+- [ ] Listening cards (hear the word, then answer)
+- [x] Daily cap for new items, with "Learn more"
+- [ ] Simple statistics screen
 
 ## M3 AI generation
 
