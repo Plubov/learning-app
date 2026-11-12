@@ -97,7 +97,10 @@ begin
 
   -- The items trigger creates the cards (as B, through RLS).
   select count(*) into n from public.cards where item_id = i;
-  if n <> 2 then raise exception 'FAIL: expected 2 cards for new item, found %', n; end if;
+  if n <> 3 then raise exception 'FAIL: expected 3 cards for new vocab item, found %', n; end if;
+  if not exists (select 1 from public.cards where item_id = i and card_type = 'listening') then
+    raise exception 'FAIL: new vocab item has no listening card';
+  end if;
   select id into c from public.cards where item_id = i and card_type = 'recognition';
 
   -- record_review updates the card, appends the event, marks the item introduced.
@@ -178,7 +181,13 @@ begin
   end if;
   select count(*) into n from public.cards c join public.items i on i.id = c.item_id
   where i.term = '물';
-  if n <> 2 then raise exception 'FAIL: imported item has % cards, expected 2', n; end if;
+  if n <> 3 then raise exception 'FAIL: imported item has % cards, expected 3', n; end if;
+
+  -- Grammar items get no listening card.
+  insert into public.items (deck_id, kind, term, meaning)
+  values (d, 'grammar', '은/는', 'topic particle') returning id into i;
+  select count(*) into n from public.cards where item_id = i;
+  if n <> 2 then raise exception 'FAIL: grammar item has % cards, expected 2', n; end if;
   if (select new_position from public.items where term = '물' and deck_id = d)
      >= (select new_position from public.items where term = '차' and deck_id = d) then
     raise exception 'FAIL: imported items do not get positions in the given order';

@@ -87,6 +87,11 @@ lives in `src/lib/scheduling.ts`. Recheck when upgrading `ts-fsrs`.
 Unique on (item_id, card_type). Index on (user_id, due_at) for the "what is
 due" query.
 
+Cards are created by a trigger on items: recognition and production for every
+item, plus listening for vocab items. A new listening card is shown only once
+the item's recognition card has graduated (state review or relearning);
+after that it follows its own schedule.
+
 ### exercises
 A task touching several items.
 

@@ -1,4 +1,6 @@
 import {
+  CARD_STATE,
+  isListeningUnlocked,
   isDueInSession,
   LEARN_AHEAD_MS,
   newItemAllowance,
@@ -104,5 +106,26 @@ describe('orderSession', () => {
       { id: 'c2', card_type: 'recognition' },
     ];
     expect(orderSession([review], newCards).map((c) => c.id)).toEqual(['r', 'c1', 'c2', 'p1']);
+  });
+});
+
+describe('isListeningUnlocked', () => {
+  test('a new listening card waits while the recognition card is new or learning', () => {
+    expect(isListeningUnlocked(CARD_STATE.new, CARD_STATE.new)).toBe(false);
+    expect(isListeningUnlocked(CARD_STATE.new, CARD_STATE.learning)).toBe(false);
+  });
+
+  test('it starts once the recognition card has graduated', () => {
+    expect(isListeningUnlocked(CARD_STATE.new, CARD_STATE.review)).toBe(true);
+    expect(isListeningUnlocked(CARD_STATE.new, CARD_STATE.relearning)).toBe(true);
+  });
+
+  test('a started listening card is always shown when due', () => {
+    expect(isListeningUnlocked(CARD_STATE.learning, CARD_STATE.new)).toBe(true);
+    expect(isListeningUnlocked(CARD_STATE.review, undefined)).toBe(true);
+  });
+
+  test('without a recognition card a new listening card stays locked', () => {
+    expect(isListeningUnlocked(CARD_STATE.new, undefined)).toBe(false);
   });
 });

@@ -4,6 +4,7 @@
  * by the "due" count on the home screen, so both always agree.
  */
 import {
+  isListeningUnlocked,
   newItemAllowance,
   orderSession,
   pickNewItems,
@@ -13,7 +14,10 @@ import {
 import type { CardRow } from '@/lib/scheduling';
 import { supabase } from '@/lib/supabase';
 
-/** Card types the review screen can show (listening and writing come later). */
+/**
+ * Card types introduced with a new word. Listening cards are loaded
+ * separately: they start once the word is known by sight.
+ */
 export const SESSION_CARD_TYPES = ['recognition', 'production'];
 
 export type SessionCard = CardRow & {
@@ -33,6 +37,9 @@ const CARD_COLUMNS =
   'learning_step, state, schedule_status, reps, lapses, last_review_at, suspended';
 
 type CardWithFlag = Omit<SessionCard, 'item'> & { suspended: boolean };
+type ListeningRow = CardWithFlag & {
+  item: SessionCard['item'] & { cards: { card_type: string; state: number }[] };
+};
 type NewItemRow = {
   id: string;
   deck_id: string;
@@ -52,7 +59,7 @@ const MAX_NEW_ITEMS = 1000;
 export async function loadSessionCards(extraNew: number): Promise<SessionCards> {
   const now = new Date();
 
-  const [reviews, decks, introducedToday, newItems] = await Promise.all([
+  const [reviews, listening, decks, introducedToday, newItems] = await Promise.all([
     // Due cards of words that have been introduced (seen at least once).
     supabase
       .from('cards')
@@ -64,6 +71,18 @@ export async function loadSessionCards(extraNew: number): Promise<SessionCards> 
       .order('due_at')
       .limit(MAX_REVIEW_CARDS)
       .overrideTypes<(SessionCard & { suspended: boolean })[], { merge: false }>(),
+    // Due listening cards of introduced words, with the states of their
+    // siblings to check whether the recognition card has graduated.
+    supabase
+      .from('cards')
+      .select(`${CARD_COLUMNS}, item:items!inner(term, meaning, notes, cards(card_type, state))`)
+      .not('item.introduced_at', 'is', null)
+      .eq('suspended', false)
+      .eq('card_type', 'listening')
+      .lte('due_at', now.toISOString())
+      .order('due_at')
+      .limit(MAX_REVIEW_CARDS)
+      .overrideTypes<ListeningRow[], { merge: false }>(),
     supabase.from('decks').select('id, new_per_day'),
     // Words introduced today, per deck, for the daily limit.
     supabase
@@ -82,7 +101,8 @@ export async function loadSessionCards(extraNew: number): Promise<SessionCards> 
       .limit(MAX_NEW_ITEMS)
       .overrideTypes<NewItemRow[], { merge: false }>(),
   ]);
-  const failed = reviews.error ?? decks.error ?? introducedToday.error ?? newItems.error;
+  const failed =
+    reviews.error ?? listening.error ?? decks.error ?? introducedToday.error ?? newItems.error;
   if (failed) throw new Error(failed.message);
   // Without an error the data is present; "?? []" below only satisfies TypeScript.
 
@@ -104,6 +124,15 @@ export async function loadSessionCards(extraNew: number): Promise<SessionCards> 
   const reviewCards: SessionCard[] = (reviews.data ?? []).map(
     ({ suspended: _suspended, ...card }) => card,
   );
+  for (const { suspended: _suspended, item, ...card } of listening.data ?? []) {
+    const recognition = item.cards.find((c) => c.card_type === 'recognition');
+    if (isListeningUnlocked(card.state, recognition?.state)) {
+      const { cards: _siblings, ...itemText } = item;
+      reviewCards.push({ ...card, item: itemText });
+    }
+  }
+  // Reviews and unlocked listening cards together, most overdue first.
+  reviewCards.sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at));
 
   return {
     cards: spreadSiblings(orderSession(reviewCards, newCards)),

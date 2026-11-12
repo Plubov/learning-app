@@ -76,3 +76,17 @@ export function orderSession<T extends { card_type: string }>(
     ...newCards.filter((c) => c.card_type !== 'recognition'),
   ];
 }
+
+/** FSRS card states as stored in cards.state (same numbers as ts-fsrs State). */
+export const CARD_STATE = { new: 0, learning: 1, review: 2, relearning: 3 } as const;
+
+/**
+ * Whether a listening card may be shown. A new listening card waits until the
+ * word's recognition card has graduated (review or relearning state), so
+ * listening practice starts with words already known by sight. Once started,
+ * it follows its own schedule.
+ */
+export function isListeningUnlocked(listeningState: number, recognitionState: number | undefined): boolean {
+  if (listeningState !== CARD_STATE.new) return true;
+  return recognitionState !== undefined && recognitionState >= CARD_STATE.review;
+}
