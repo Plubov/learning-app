@@ -166,6 +166,13 @@ export type Database = {
             referencedRelation: "decks"
             referencedColumns: ["id", "user_id"]
           },
+          {
+            foreignKeyName: "items_source_fkey"
+            columns: ["source_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id", "user_id"]
+          },
         ]
       }
       profiles: {
@@ -258,11 +265,53 @@ export type Database = {
           },
         ]
       }
+      sources: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          storage_path: string | null
+          text: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          storage_path?: string | null
+          text?: string | null
+          title: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          storage_path?: string | null
+          text?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      import_items: {
+        Args: {
+          p_deck_id: string
+          p_items: Json
+          p_text: string
+          p_title: string
+        }
+        Returns: number
+      }
       record_review: {
         Args: {
           p_card_id: string

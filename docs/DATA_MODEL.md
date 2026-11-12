@@ -93,6 +93,16 @@ Join table: which items an exercise involves, and `role`
 Pasted text, imports, later uploaded files.
 `kind` ('paste', 'import', 'file'), `title`, `storage_path` null, `text` null.
 
+An import keeps the complete file in `text`, including the parts that were
+not turned into items (e.g. RemNote grammar cards, kept for M4).
+`items.source_id` references `(id, user_id)`; deleting a source keeps its
+items and only clears `source_id`.
+
+Imports are saved through the database function `import_items` (deck, title,
+file text, list of `{term, meaning}`): in one transaction it creates the
+source and the vocab items, skipping terms the deck already has. The items
+trigger creates the cards.
+
 ## Learning record
 
 ### review_events (append-only)

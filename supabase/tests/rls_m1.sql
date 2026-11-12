@@ -31,6 +31,9 @@ begin
   values (a, d, 'vocab', 'rls-test', 'x') returning id into i;
   select id into c from public.cards where item_id = i limit 1;
   perform set_config('test.card_a', c::text, true);
+  insert into public.sources (user_id, kind, title, text)
+  values (a, 'import', 'RLS test source of A', 'x') returning id into i;
+  perform set_config('test.source_a', i::text, true);
 
   if not exists (select 1 from public.profiles
                  where user_id = '00000000-0000-4000-8000-00000000000b') then
@@ -154,6 +157,39 @@ begin
     raise exception 'FAIL: review_events could be deleted';
   exception when insufficient_privilege then null;
   end;
+
+  -- sources: B sees only own sources and cannot link an item to A's source.
+  select count(*) into n from public.sources;
+  if n <> 0 then raise exception 'FAIL: B can see the source of A'; end if;
+  begin
+    insert into public.items (deck_id, kind, term, meaning, source_id)
+    values (d, 'vocab', '배', 'pear', current_setting('test.source_a')::uuid);
+    raise exception 'FAIL: B linked an item to the source of A';
+  exception when foreign_key_violation then null;
+  end;
+
+  -- import_items: adds new terms, skips existing ones, keeps the file text.
+  n := public.import_items(d, 'test.md', '- apple↔사과', '[{"term": "사과", "meaning": "apple"},
+    {"term": "물", "meaning": "water"}, {"term": "차", "meaning": "car; tea"}]'::jsonb);
+  if n <> 2 then raise exception 'FAIL: import_items added % items, expected 2', n; end if;
+  if not exists (select 1 from public.items i join public.sources s on s.id = i.source_id
+                 where i.term = '물' and s.title = 'test.md' and s.text = '- apple↔사과') then
+    raise exception 'FAIL: imported item is not linked to its source';
+  end if;
+  select count(*) into n from public.cards c join public.items i on i.id = c.item_id
+  where i.term = '물';
+  if n <> 2 then raise exception 'FAIL: imported item has % cards, expected 2', n; end if;
+
+  -- import_items into the deck of A fails completely (no source left behind).
+  begin
+    perform public.import_items(current_setting('test.deck_a')::uuid, 'evil.md', 'x',
+      '[{"term": "배", "meaning": "pear"}]'::jsonb);
+    raise exception 'FAIL: B imported into the deck of A';
+  exception when foreign_key_violation then null;
+  end;
+  if exists (select 1 from public.sources where title = 'evil.md') then
+    raise exception 'FAIL: failed import left a source behind';
+  end if;
 end $$;
 
 -- Logged-out visitors (anon role) see nothing.
@@ -167,6 +203,8 @@ begin
   if n <> 0 then raise exception 'FAIL: anon can see % decks', n; end if;
   select count(*) into n from public.profiles;
   if n <> 0 then raise exception 'FAIL: anon can see % profiles', n; end if;
+  select count(*) into n from public.sources;
+  if n <> 0 then raise exception 'FAIL: anon can see % sources', n; end if;
 end $$;
 
 select 'all RLS checks passed' as result;
