@@ -9,6 +9,7 @@ export default function AppLayout() {
       <Stack.Screen name="review" options={{ title: 'Review' }} />
       <Stack.Screen name="decks/new" options={{ title: 'New deck' }} />
       <Stack.Screen name="decks/[deckId]/index" options={{ title: '' }} />
+      <Stack.Screen name="decks/[deckId]/import" options={{ title: 'Import from RemNote' }} />
       <Stack.Screen name="decks/[deckId]/items/new" options={{ title: 'Add word' }} />
       <Stack.Screen name="decks/[deckId]/items/[itemId]" options={{ title: 'Edit word' }} />
     </Stack>

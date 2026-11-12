@@ -34,6 +34,11 @@ export default function DeckScreen() {
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
       <Button title="Add word" onPress={() => router.push(`/decks/${deckId}/items/new`)} />
+      <Button
+        title="Import from RemNote"
+        variant="secondary"
+        onPress={() => router.push(`/decks/${deckId}/import`)}
+      />
 
       {deck && deck.items.length === 0 && (
         <ThemedText themeColor="textSecondary">No words yet.</ThemedText>
