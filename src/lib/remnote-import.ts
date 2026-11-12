@@ -5,14 +5,15 @@
  * RemNote writes one card per bullet line:
  *   - Wasser↔물              two-way card (front ↔ back)  -> vocab item
  *   - Wann wird …?→Antwort   one-way card                  -> skipped (grammar, M4)
- *   - ## Zahlen              heading                       -> ignored
+ *   - ## Zahlen              heading                       -> section of the next cards
  * Whichever side contains Hangul becomes the Korean term; the other side is
  * the meaning.
  */
 
 import { cleanText } from '@/lib/text';
 
-export type ImportedItem = { term: string; meaning: string };
+/** section: the heading the card was under (used only to order new words). */
+export type ImportedItem = { term: string; meaning: string; section: string };
 
 export type SkippedLine = {
   line: number; // 1-based, as in an editor
@@ -37,12 +38,18 @@ function cleanSide(side: string): string {
 }
 
 export function parseRemNoteMarkdown(markdown: string): ParsedExport {
-  const byTerm = new Map<string, string[]>(); // term -> meanings, in file order
+  // term -> meanings (in file order) and the section of its first occurrence
+  const byTerm = new Map<string, { meanings: string[]; section: string }>();
+  let section = '';
   const skipped: SkippedLine[] = [];
 
   markdown.split(/\r?\n/).forEach((raw, index) => {
     const text = raw.trim().replace(/^-\s*/, '').trim();
-    if (text === '' || text.startsWith('#')) return; // empty bullet or heading
+    if (text === '') return; // empty bullet
+    if (text.startsWith('#')) {
+      section = cleanSide(text.replace(/^#+/, ''));
+      return;
+    }
     const line = index + 1;
 
     // The first arrow is the separator; a later one belongs to the answer.
@@ -68,29 +75,42 @@ export function parseRemNoteMarkdown(markdown: string): ParsedExport {
       return;
     }
 
-    const meanings = byTerm.get(term) ?? [];
-    if (!meanings.includes(meaning)) meanings.push(meaning);
-    byTerm.set(term, meanings);
+    const entry = byTerm.get(term) ?? { meanings: [], section };
+    if (!entry.meanings.includes(meaning)) entry.meanings.push(meaning);
+    byTerm.set(term, entry);
   });
 
   const merged: string[] = [];
-  const items = [...byTerm].map(([term, meanings]) => {
-    if (meanings.length > 1) merged.push(term);
-    return { term, meaning: meanings.join('; ') };
+  const items = [...byTerm].map(([term, entry]) => {
+    if (entry.meanings.length > 1) merged.push(term);
+    return { term, meaning: entry.meanings.join('; '), section: entry.section };
   });
   return { items, skipped, merged };
 }
 
-/** Splits parsed items into new ones and ones the deck already has. */
+export type ExistingItem = { term: string; introduced: boolean };
+
+export type ImportPlan = {
+  /** Words not in the deck yet. */
+  toAdd: ImportedItem[];
+  /** Words in the deck but not learned yet: they get the new queue position. */
+  requeue: ImportedItem[];
+  /** Words already learned: left alone. */
+  learned: ImportedItem[];
+};
+
+/** Splits parsed items by what the deck already has. Keeps the given order. */
 export function planImport(
   items: readonly ImportedItem[],
-  existingTerms: readonly string[],
-): { toAdd: ImportedItem[]; alreadyPresent: ImportedItem[] } {
-  const existing = new Set(existingTerms.map(cleanText));
-  const toAdd: ImportedItem[] = [];
-  const alreadyPresent: ImportedItem[] = [];
+  existing: readonly ExistingItem[],
+): ImportPlan {
+  const introduced = new Map(existing.map((e) => [cleanText(e.term), e.introduced]));
+  const plan: ImportPlan = { toAdd: [], requeue: [], learned: [] };
   for (const item of items) {
-    (existing.has(item.term) ? alreadyPresent : toAdd).push(item);
+    const state = introduced.get(item.term);
+    if (state === undefined) plan.toAdd.push(item);
+    else if (state) plan.learned.push(item);
+    else plan.requeue.push(item);
   }
-  return { toAdd, alreadyPresent };
+  return plan;
 }

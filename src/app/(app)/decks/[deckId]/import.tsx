@@ -9,8 +9,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { orderForLearning } from '@/lib/learning-order';
 import { readPickedFile } from '@/lib/read-picked-file';
-import { parseRemNoteMarkdown, planImport, type ImportedItem, type SkippedLine } from '@/lib/remnote-import';
+import {
+  parseRemNoteMarkdown,
+  planImport,
+  type ImportedItem,
+  type SkippedLine,
+} from '@/lib/remnote-import';
 import { supabase } from '@/lib/supabase';
 
 /** Largest file the sources table accepts (characters). */
@@ -21,8 +27,11 @@ const PREVIEW_ROWS = 15;
 type Preview = {
   fileName: string;
   text: string;
-  toAdd: ImportedItem[];
-  alreadyPresent: number;
+  /** New and not yet learned words, in learning order: what will be saved. */
+  queue: ImportedItem[];
+  newCount: number;
+  requeueCount: number;
+  learnedCount: number;
   merged: string[];
   oneWay: number;
   otherSkipped: SkippedLine[];
@@ -32,7 +41,7 @@ export default function ImportScreen() {
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
   const theme = useTheme();
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [added, setAdded] = useState<number | null>(null);
+  const [result, setResult] = useState<{ added: number; requeued: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -52,10 +61,11 @@ export default function ImportScreen() {
       }
       const parsed = parseRemNoteMarkdown(text);
 
-      // Terms already in this deck are shown as such and not added again.
+      // Terms already in this deck are not added again; those not learned
+      // yet get their place in the new learning order.
       const { data, error: loadError } = await supabase
         .from('items')
-        .select('term')
+        .select('term, introduced_at')
         .eq('deck_id', deckId)
         .eq('kind', 'vocab')
         .range(0, 9999);
@@ -65,13 +75,18 @@ export default function ImportScreen() {
       }
       const plan = planImport(
         parsed.items,
-        data.map((row) => row.term),
+        data.map((row) => ({ term: row.term, introduced: row.introduced_at !== null })),
       );
+      // Ordered over all words of the file, so phrases also follow words
+      // that are already in the deck; then only the words to save are kept.
+      const toSave = new Set([...plan.toAdd, ...plan.requeue].map((item) => item.term));
       setPreview({
         fileName: asset.name,
         text,
-        toAdd: plan.toAdd,
-        alreadyPresent: plan.alreadyPresent.length,
+        queue: orderForLearning(parsed.items).filter((item) => toSave.has(item.term)),
+        newCount: plan.toAdd.length,
+        requeueCount: plan.requeue.length,
+        learnedCount: plan.learned.length,
         merged: parsed.merged,
         oneWay: parsed.skipped.filter((s) => s.reason === 'one-way').length,
         otherSkipped: parsed.skipped.filter((s) => s.reason !== 'one-way'),
@@ -91,23 +106,25 @@ export default function ImportScreen() {
       p_deck_id: deckId,
       p_title: preview.fileName,
       p_text: preview.text,
-      p_items: preview.toAdd,
+      p_items: preview.queue.map(({ term, meaning }) => ({ term, meaning })),
     });
     setBusy(false);
     if (importError) {
       setError(importError.message);
       return;
     }
-    setAdded(data);
+    // The function returns {"added": n, "requeued": m}.
+    setResult(data as { added: number; requeued: number });
   }
 
-  if (added !== null) {
+  if (result !== null) {
     return (
       <Screen>
         <ThemedText type="subtitle">Import done</ThemedText>
         <ThemedText>
-          {added} {added === 1 ? 'word was' : 'words were'} added. New words are introduced a
-          few per day, according to the deck&apos;s daily limit.
+          {result.added} {result.added === 1 ? 'word' : 'words'} added
+          {result.requeued > 0 && `, ${result.requeued} not yet learned put in the new order`}.
+          New words are introduced a few per day, according to the deck&apos;s daily limit.
         </ThemedText>
         <Button title="Back to deck" onPress={() => router.back()} />
       </Screen>
@@ -129,10 +146,16 @@ export default function ImportScreen() {
         <>
           <ThemedText type="smallBold">{preview.fileName}</ThemedText>
           <View style={styles.summary}>
-            <ThemedText>{preview.toAdd.length} new words</ThemedText>
-            {preview.alreadyPresent > 0 && (
+            <ThemedText>{preview.newCount} new words</ThemedText>
+            {preview.requeueCount > 0 && (
               <ThemedText themeColor="textSecondary">
-                {preview.alreadyPresent} already in this deck (skipped)
+                {preview.requeueCount} already in this deck but not learned yet: they get the new
+                learning order
+              </ThemedText>
+            )}
+            {preview.learnedCount > 0 && (
+              <ThemedText themeColor="textSecondary">
+                {preview.learnedCount} already learned (left as they are)
               </ThemedText>
             )}
             {preview.merged.length > 0 && (
@@ -158,7 +181,12 @@ export default function ImportScreen() {
             )}
           </View>
 
-          {preview.toAdd.slice(0, PREVIEW_ROWS).map((item) => (
+          {preview.queue.length > 0 && (
+            <ThemedText type="smallBold">
+              First words in learning order (topics mixed, phrases after their words)
+            </ThemedText>
+          )}
+          {preview.queue.slice(0, PREVIEW_ROWS).map((item) => (
             <ThemedView key={item.term} type="backgroundElement" style={styles.row}>
               <ThemedText style={styles.term}>{item.term}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
@@ -166,17 +194,21 @@ export default function ImportScreen() {
               </ThemedText>
             </ThemedView>
           ))}
-          {preview.toAdd.length > PREVIEW_ROWS && (
+          {preview.queue.length > PREVIEW_ROWS && (
             <ThemedText type="small" themeColor="textSecondary">
-              … and {preview.toAdd.length - PREVIEW_ROWS} more
+              … and {preview.queue.length - PREVIEW_ROWS} more
             </ThemedText>
           )}
         </>
       )}
 
-      {preview && preview.toAdd.length > 0 && (
+      {preview && preview.queue.length > 0 && (
         <Button
-          title={`Import ${preview.toAdd.length} words`}
+          title={
+            preview.newCount > 0
+              ? `Import ${preview.newCount} words`
+              : `Reorder ${preview.requeueCount} words`
+          }
           onPress={confirmImport}
           busy={busy}
         />

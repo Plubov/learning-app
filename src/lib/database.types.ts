@@ -126,6 +126,7 @@ export type Database = {
           introduced_at: string | null
           kind: string
           meaning: string
+          new_position: number | null
           notes: string | null
           source_id: string | null
           term: string
@@ -139,6 +140,7 @@ export type Database = {
           introduced_at?: string | null
           kind: string
           meaning: string
+          new_position?: number | null
           notes?: string | null
           source_id?: string | null
           term: string
@@ -152,6 +154,7 @@ export type Database = {
           introduced_at?: string | null
           kind?: string
           meaning?: string
+          new_position?: number | null
           notes?: string | null
           source_id?: string | null
           term?: string
@@ -310,7 +313,7 @@ export type Database = {
           p_text: string
           p_title: string
         }
-        Returns: number
+        Returns: Json
       }
       record_review: {
         Args: {

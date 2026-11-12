@@ -19,8 +19,8 @@ describe('parseRemNoteMarkdown', () => {
   const parsed = parseRemNoteMarkdown(SAMPLE);
 
   test('two-way cards become items with Korean as the term', () => {
-    expect(parsed.items).toContainEqual({ term: '존댓말', meaning: 'Koreanische Höflichkeitsform' });
-    expect(parsed.items).toContainEqual({ term: '지금 / 이제', meaning: 'jetzt / nun' });
+    expect(parsed.items).toContainEqual({ term: '존댓말', meaning: 'Koreanische Höflichkeitsform', section: 'Grammatik' });
+    expect(parsed.items).toContainEqual({ term: '지금 / 이제', meaning: 'jetzt / nun', section: 'Zeit' });
   });
 
   test('one-way cards are skipped and reported with their line number', () => {
@@ -46,20 +46,24 @@ describe('parseRemNoteMarkdown', () => {
   });
 
   test('the same term with different meanings becomes one item', () => {
-    expect(parsed.items).toContainEqual({ term: '분', meaning: 'Minute; Person (höfliche Zählform)' });
+    expect(parsed.items).toContainEqual({
+      term: '분',
+      meaning: 'Minute; Person (höfliche Zählform)',
+      section: 'Zeit',
+    });
     expect(parsed.merged).toEqual(['분']);
   });
 
   test('an exact duplicate is kept once and not reported as merged', () => {
-    expect(parsed.items.filter((i) => i.term === '어디')).toEqual([{ term: '어디', meaning: 'wo' }]);
+    expect(parsed.items.filter((i) => i.term === '어디')).toEqual([{ term: '어디', meaning: 'wo', section: 'Personen' }]);
   });
 
   test('Korean on the front side is detected', () => {
-    expect(parseRemNoteMarkdown('- 물↔Wasser').items).toEqual([{ term: '물', meaning: 'Wasser' }]);
+    expect(parseRemNoteMarkdown('- 물↔Wasser').items).toEqual([{ term: '물', meaning: 'Wasser', section: '' }]);
   });
 
   test('numbers on the front stay the meaning', () => {
-    expect(parseRemNoteMarkdown('- 5↔다섯').items).toEqual([{ term: '다섯', meaning: '5' }]);
+    expect(parseRemNoteMarkdown('- 5↔다섯').items).toEqual([{ term: '다섯', meaning: '5', section: '' }]);
   });
 
   test('a card without Hangul is skipped', () => {
@@ -70,33 +74,44 @@ describe('parseRemNoteMarkdown', () => {
 
   test('Markdown bold is removed', () => {
     expect(parseRemNoteMarkdown('- **Hallo**↔안녕하세요').items).toEqual([
-      { term: '안녕하세요', meaning: 'Hallo' },
+      { term: '안녕하세요', meaning: 'Hallo', section: '' },
     ]);
   });
 
   test('Hangul is converted to NFC and Windows line endings work', () => {
     const nfd = '물'.normalize('NFD');
     expect(parseRemNoteMarkdown(`- Wasser↔${nfd}\r\n- Tee↔차\r\n`).items).toEqual([
-      { term: '물', meaning: 'Wasser' },
-      { term: '차', meaning: 'Tee' },
+      { term: '물', meaning: 'Wasser', section: '' },
+      { term: '차', meaning: 'Tee', section: '' },
     ]);
   });
 });
 
 describe('planImport', () => {
-  const items = [
-    { term: '물', meaning: 'Wasser' },
-    { term: '차', meaning: 'Tee' },
-  ];
+  const water = { term: '물', meaning: 'Wasser', section: '' };
+  const tea = { term: '차', meaning: 'Tee', section: '' };
+  const house = { term: '집', meaning: 'Haus', section: '' };
 
-  test('items whose term exists are not added again', () => {
-    expect(planImport(items, ['물'])).toEqual({
-      toAdd: [{ term: '차', meaning: 'Tee' }],
-      alreadyPresent: [{ term: '물', meaning: 'Wasser' }],
+  test('splits into new, not yet learned and learned words', () => {
+    const existing = [
+      { term: '물', introduced: true },
+      { term: '집', introduced: false },
+    ];
+    expect(planImport([water, tea, house], existing)).toEqual({
+      toAdd: [tea],
+      requeue: [house],
+      learned: [water],
     });
   });
 
   test('everything is new in an empty deck', () => {
-    expect(planImport(items, []).toAdd).toHaveLength(2);
+    expect(planImport([water, tea], []).toAdd).toEqual([water, tea]);
+  });
+});
+
+describe('sections', () => {
+  test('each card gets the heading it was under', () => {
+    const parsed = parseRemNoteMarkdown('- ## Farben\n    - rot↔빨간색\n- ## Verben\n    - gehen↔가다');
+    expect(parsed.items.map((i) => i.section)).toEqual(['Farben', 'Verben']);
   });
 });

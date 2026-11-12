@@ -33,8 +33,13 @@ Daily limit: an item counts as introduced on the first review of any of its
 cards (`items.introduced_at`). A session shows the due cards of introduced
 items, plus the cards of the oldest not-yet-introduced items, up to
 `new_per_day` minus the items introduced since local midnight. "Learn more"
-in the app adds 10 items beyond that for the current session. Imports keep
-the file order through `created_at`.
+in the app adds 10 items beyond that for the current session.
+
+Order of new items: `new_position`, then `created_at`. Imports compute the
+order in the app (`src/lib/learning-order.ts`): sections of the file are
+spread evenly so similar words (colours, left/right) are not learned on the
+same day, and a phrase comes after the words it contains. Word frequency is
+not used yet (planned with AI levels in M3).
 
 ### items
 The unit of knowledge.
@@ -48,6 +53,7 @@ The unit of knowledge.
 | notes | text | example, usage hint |
 | source_id | uuid null | where it came from |
 | introduced_at | timestamptz null | null = not yet shown to the learner |
+| new_position | int null | place in the deck's queue of new words (lower = sooner); null for words added by hand, which come first |
 
 Unique on (deck_id, kind, term) to prevent duplicates on import.
 
@@ -106,9 +112,12 @@ not turned into items (e.g. RemNote grammar cards, kept for M4).
 items and only clears `source_id`.
 
 Imports are saved through the database function `import_items` (deck, title,
-file text, list of `{term, meaning}`): in one transaction it creates the
-source and the vocab items, skipping terms the deck already has. The items
-trigger creates the cards.
+file text, list of `{term, meaning}` in learning order). In one transaction
+it reuses or creates the source, adds new vocab items with positions after
+the deck's last `new_position`, and gives words already in the deck but not
+yet introduced their new position (meanings are never changed). Importing a
+file again therefore re-orders the words not yet learned. Returns
+`{"added": n, "requeued": m}`. The items trigger creates the cards.
 
 ## Learning record
 

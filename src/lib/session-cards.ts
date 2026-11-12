@@ -71,11 +71,13 @@ export async function loadSessionCards(extraNew: number): Promise<SessionCards> 
       .select('deck_id')
       .gte('introduced_at', startOfLocalDay(now).toISOString())
       .range(0, 9999),
-    // Words never shown yet, oldest first (imports keep the file order).
+    // Words never shown yet, in learning order: words added by hand (no
+    // position) first, then the import queue (see learning-order.ts).
     supabase
       .from('items')
       .select(`id, deck_id, term, meaning, notes, cards(${CARD_COLUMNS})`)
       .is('introduced_at', null)
+      .order('new_position', { nullsFirst: true })
       .order('created_at')
       .limit(MAX_NEW_ITEMS)
       .overrideTypes<NewItemRow[], { merge: false }>(),

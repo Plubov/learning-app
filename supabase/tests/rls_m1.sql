@@ -168,9 +168,9 @@ begin
   exception when foreign_key_violation then null;
   end;
 
-  -- import_items: adds new terms, skips existing ones, keeps the file text.
-  n := public.import_items(d, 'test.md', '- apple↔사과', '[{"term": "사과", "meaning": "apple"},
-    {"term": "물", "meaning": "water"}, {"term": "차", "meaning": "car; tea"}]'::jsonb);
+  -- import_items: adds new terms, leaves the learned 사과 alone, keeps the file text.
+  n := (public.import_items(d, 'test.md', '- apple↔사과', '[{"term": "사과", "meaning": "apple"},
+    {"term": "물", "meaning": "water"}, {"term": "차", "meaning": "car; tea"}]'::jsonb) ->> 'added')::int;
   if n <> 2 then raise exception 'FAIL: import_items added % items, expected 2', n; end if;
   if not exists (select 1 from public.items i join public.sources s on s.id = i.source_id
                  where i.term = '물' and s.title = 'test.md' and s.text = '- apple↔사과') then
@@ -179,10 +179,27 @@ begin
   select count(*) into n from public.cards c join public.items i on i.id = c.item_id
   where i.term = '물';
   if n <> 2 then raise exception 'FAIL: imported item has % cards, expected 2', n; end if;
-  if (select created_at from public.items where term = '물' and deck_id = d)
-     >= (select created_at from public.items where term = '차' and deck_id = d) then
-    raise exception 'FAIL: imported items do not keep the file order';
+  if (select new_position from public.items where term = '물' and deck_id = d)
+     >= (select new_position from public.items where term = '차' and deck_id = d) then
+    raise exception 'FAIL: imported items do not get positions in the given order';
   end if;
+
+  -- Importing the same file again in a new order re-queues the words not yet
+  -- learned, adds nothing and reuses the source.
+  if public.import_items(d, 'test.md', '- apple↔사과', '[{"term": "차", "meaning": "x"},
+       {"term": "물", "meaning": "x"}, {"term": "사과", "meaning": "x"}]'::jsonb)
+     <> '{"added": 0, "requeued": 2}'::jsonb then
+    raise exception 'FAIL: second import did not re-queue exactly 2 words';
+  end if;
+  if (select new_position from public.items where term = '차' and deck_id = d)
+     >= (select new_position from public.items where term = '물' and deck_id = d) then
+    raise exception 'FAIL: re-queued words are not in the new order';
+  end if;
+  if exists (select 1 from public.items where deck_id = d and meaning = 'x') then
+    raise exception 'FAIL: a second import changed meanings';
+  end if;
+  select count(*) into n from public.sources where title = 'test.md';
+  if n <> 1 then raise exception 'FAIL: same file stored % times, expected once', n; end if;
 
   -- import_items into the deck of A fails completely (no source left behind).
   begin

@@ -49,6 +49,8 @@ Project:
 - [ ] ai_connections and ai_usage; own API key entered in settings
 - [ ] Paste a word list or text, review proposed items, confirm to save
 - [ ] Output validation against a schema
+- [ ] AI-assigned level per word (e.g. TOPIK 1–6), used to introduce common
+      words first (learning order rule "frequency")
 
 ## M4 Knowledge model and exercises
 
