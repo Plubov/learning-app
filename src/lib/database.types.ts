@@ -85,6 +85,48 @@ export type Database = {
           },
         ]
       }
+      daily_activity: {
+        Row: {
+          created_at: string
+          duration_ms: number
+          goal: number
+          goal_met_at: string | null
+          id: string
+          local_date: string
+          new_items: number
+          reviews: number
+          time_zone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number
+          goal: number
+          goal_met_at?: string | null
+          id?: string
+          local_date: string
+          new_items?: number
+          reviews?: number
+          time_zone: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number
+          goal?: number
+          goal_met_at?: string | null
+          id?: string
+          local_date?: string
+          new_items?: number
+          reviews?: number
+          time_zone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       decks: {
         Row: {
           created_at: string
@@ -181,7 +223,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
-          daily_goal: number | null
+          daily_goal: number
           display_name: string | null
           push_token: string | null
           reminder_time: string | null
@@ -191,7 +233,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          daily_goal?: number | null
+          daily_goal?: number
           display_name?: string | null
           push_token?: string | null
           reminder_time?: string | null
@@ -201,7 +243,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          daily_goal?: number | null
+          daily_goal?: number
           display_name?: string | null
           push_token?: string | null
           reminder_time?: string | null
@@ -325,8 +367,9 @@ export type Database = {
           p_response?: Json
           p_reviewed_at: string
           p_schedule: Json
+          p_time_zone?: string
         }
-        Returns: undefined
+        Returns: Json
       }
       review_stats: {
         Args: { p_card_types: string[]; p_days?: number; p_time_zone: string }

@@ -66,7 +66,8 @@ Project:
 
 ## M5 Habit
 
-- [ ] daily_activity and streak
+- [x] daily_activity and streak; daily goal (reviews per day) with a
+      celebration when it is reached
 - [ ] Development build (EAS) and push reminder notifications
 - [ ] More AI connections: OpenRouter, OpenAI-compatible endpoint
 

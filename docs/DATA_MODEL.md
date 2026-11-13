@@ -141,9 +141,9 @@ whole account is deleted.
 An exercise with three items writes three rows.
 
 Card reviews are saved through the database function `record_review`, which
-in one transaction updates the card's schedule, appends the event and sets
-`items.introduced_at` on the first review. The app does not write these
-three separately.
+in one transaction updates the card's schedule, appends the event, sets
+`items.introduced_at` on the first review and updates the day's row in
+`daily_activity`. The app does not write these separately.
 
 The statistics screen reads its numbers from the database function
 `review_stats` (time zone, card types, number of days). It only reads and
@@ -172,9 +172,29 @@ probability from the FSRS state of its cards, last seen. Computed, never
 edited directly.
 
 ### daily_activity
-Per (user_id, local_date): reviews done, new items, minutes, goal met.
-The streak is computed from this table. Stores the user's time zone with the
-date so travel does not break streaks.
+One row per (user_id, local_date), a summary of review_events for the daily
+goal and streak (it could be rebuilt from the events).
+
+| column | type | note |
+|---|---|---|
+| local_date | date | the day in the learner's time zone |
+| time_zone | text | IANA name the day was counted in, so travel does not break streaks |
+| reviews | int | reviews that day |
+| new_items | int | items introduced that day |
+| duration_ms | bigint | sum of answer times |
+| goal | int | reviews needed that day; follows `profiles.daily_goal` until met, then fixed |
+| goal_met_at | timestamptz null | when the goal was reached; null = not reached |
+
+Written only by `record_review`, in the same transaction as the review. The
+app passes the device's time zone (`p_time_zone`); an unknown name falls back
+to `profiles.timezone`. `record_review` returns
+`{"reviews_today", "goal", "goal_reached"}`; `goal_reached` is true only for
+the review that reached the goal, which shows the celebration.
+No delete policy: the history only disappears with the account.
+
+The streak is computed in the app (`src/lib/streak.ts`): days in a row with
+`goal_met_at` set, ending today, or ending yesterday while today's goal is
+not met yet.
 
 ## AI
 
@@ -199,7 +219,8 @@ One row per AI call: `connection_id`, `task` ('generate_items',
 
 ### profiles
 `user_id` (primary key), `display_name`, `timezone` (IANA name, default
-'UTC'), `reminder_time`, `daily_goal`, `push_token` null.
+'UTC'; the app keeps it equal to the device's), `reminder_time`,
+`daily_goal` (reviews per day, default 20), `push_token` null.
 Created automatically for each new user by the `on_auth_user_created`
 trigger.
 

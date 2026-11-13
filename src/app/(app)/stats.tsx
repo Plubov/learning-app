@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -7,6 +7,13 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
+import {
+  loadGoalStatus,
+  MAX_DAILY_GOAL,
+  MIN_DAILY_GOAL,
+  setDailyGoal,
+  type GoalStatus,
+} from '@/lib/daily-goal';
 import { SESSION_CARD_TYPES } from '@/lib/session-cards';
 import {
   barHeights,
@@ -15,15 +22,14 @@ import {
   weekdayLabel,
   type ReviewStats,
 } from '@/lib/stats';
+import { streakLabel } from '@/lib/streak';
 import { supabase } from '@/lib/supabase';
+import { deviceTimeZone } from '@/lib/time-zone';
 
 const CHART_DAYS = 14;
 const CHART_HEIGHT = 120;
-
-/** The device's time zone, e.g. "Europe/Berlin"; decides where a day begins. */
-function deviceTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-}
+/** How much one press of − or + changes the daily goal. */
+const GOAL_STEP = 5;
 
 export default function StatsScreen() {
   const theme = useTheme();
@@ -38,6 +44,16 @@ export default function StatsScreen() {
     return { data: data as unknown as ReviewStats | null, error };
   }, []);
   const { data: stats, error, loading } = useFocusQuery(load);
+
+  const loadGoal = useCallback(
+    () =>
+      loadGoalStatus().then(
+        (status) => ({ data: status, error: null }),
+        (reason: unknown) => ({ data: null, error: { message: String(reason) } }),
+      ),
+    [],
+  );
+  const { data: goalStatus } = useFocusQuery<GoalStatus>(loadGoal);
 
   if (error) {
     return (
@@ -66,6 +82,8 @@ export default function StatsScreen() {
 
   return (
     <Screen>
+      {goalStatus && <DailyGoal status={goalStatus} />}
+
       <ThemedText type="smallBold">Today</ThemedText>
       <View style={styles.tiles}>
         <Tile value={today.reviews} label="reviews" />
@@ -123,6 +141,72 @@ export default function StatsScreen() {
   );
 }
 
+/** Streak tiles and the − / + control for the number of reviews per day. */
+function DailyGoal({ status }: { status: GoalStatus }) {
+  const theme = useTheme();
+  // The goal as last chosen on this screen; saved in the background.
+  const [goal, setGoal] = useState(status.goal);
+  const [error, setError] = useState<string | null>(null);
+
+  function change(by: number) {
+    const next = Math.min(MAX_DAILY_GOAL, Math.max(MIN_DAILY_GOAL, goal + by));
+    if (next === goal) return;
+    const previous = goal;
+    setGoal(next);
+    setError(null);
+    setDailyGoal(next).catch((reason: unknown) => {
+      setGoal(previous);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    });
+  }
+
+  return (
+    <>
+      <ThemedText type="smallBold">Daily goal</ThemedText>
+      <View style={styles.tiles}>
+        <Tile
+          value={status.streak > 0 ? `🔥 ${status.streak}` : '0'}
+          label={status.streak > 0 ? streakLabel(status.streak) : 'no streak yet'}
+        />
+        <Tile value={status.longest} label="longest streak (days)" />
+      </View>
+      <ThemedView type="backgroundElement" style={styles.goalRow}>
+        <StepButton label="−" onPress={() => change(-GOAL_STEP)} disabled={goal <= MIN_DAILY_GOAL} />
+        <View style={styles.goalText}>
+          <ThemedText style={styles.tileValue}>{goal}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            reviews a day
+          </ThemedText>
+        </View>
+        <StepButton label="+" onPress={() => change(GOAL_STEP)} disabled={goal >= MAX_DAILY_GOAL} />
+      </ThemedView>
+      {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
+      <ThemedText type="small" themeColor="textSecondary">
+        Reach the goal each day to keep your streak. A new goal applies from today; finished
+        days keep theirs.
+      </ThemedText>
+    </>
+  );
+}
+
+function StepButton(props: { label: string; onPress: () => void; disabled: boolean }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={props.onPress}
+      disabled={props.disabled}
+      accessibilityRole="button"
+      accessibilityLabel={props.label === '+' ? 'Raise goal' : 'Lower goal'}
+      style={({ pressed }) => [
+        styles.step,
+        { borderColor: theme.border },
+        (props.disabled || pressed) && styles.dimmed,
+      ]}>
+      <ThemedText style={styles.stepLabel}>{props.label}</ThemedText>
+    </Pressable>
+  );
+}
+
 function Tile({ value, label }: { value: number | string; label: string }) {
   return (
     <ThemedView type="backgroundElement" style={styles.tile}>
@@ -151,4 +235,22 @@ const styles = StyleSheet.create({
   barValue: { fontSize: 10, lineHeight: 14 },
   labels: { flexDirection: 'row', gap: Spacing.half },
   dayLabel: { flex: 1, textAlign: 'center', fontSize: 10, lineHeight: 14 },
+  goalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+  },
+  goalText: { alignItems: 'center' },
+  step: {
+    width: 48,
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepLabel: { fontSize: 24, lineHeight: 28 },
+  dimmed: { opacity: 0.4 },
 });

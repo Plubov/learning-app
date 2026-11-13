@@ -1,6 +1,6 @@
 import { Link, router } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
@@ -9,7 +9,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
+import { loadGoalStatus, syncTimeZone } from '@/lib/daily-goal';
 import { loadSessionCards } from '@/lib/session-cards';
+import { goalProgress, streakLabel } from '@/lib/streak';
 import { useSession } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 
@@ -33,6 +35,15 @@ export default function DecksScreen() {
     [],
   );
   const { data: today } = useFocusQuery(loadDue);
+
+  const loadGoal = useCallback(() => {
+    syncTimeZone().catch(() => {}); // see syncTimeZone: retried on the next visit
+    return loadGoalStatus().then(
+      (status) => ({ data: status, error: null }),
+      (reason: unknown) => ({ data: null, error: { message: String(reason) } }),
+    );
+  }, []);
+  const { data: goal } = useFocusQuery(loadGoal);
   const dueCount = today?.cards.length ?? 0;
   let reviewTitle = 'Nothing due';
   if (dueCount > 0) reviewTitle = `Review (${dueCount} due)`;
@@ -41,6 +52,36 @@ export default function DecksScreen() {
   return (
     <Screen>
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
+
+      {goal && (
+        <Link href="/stats" asChild>
+          <Pressable accessibilityRole="button">
+            <ThemedView type="backgroundElement" style={styles.goal}>
+              <View style={styles.goalRow}>
+                <ThemedText type="smallBold">
+                  {goal.streak > 0 ? `🔥 ${streakLabel(goal.streak)}` : 'No streak yet'}
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {goal.metToday
+                    ? 'Goal reached ✓'
+                    : `Today ${goal.todayReviews} / ${goal.goal} reviews`}
+                </ThemedText>
+              </View>
+              <View style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
+                <View
+                  style={[
+                    styles.progress,
+                    {
+                      backgroundColor: theme.tint,
+                      width: `${goalProgress(goal.todayReviews, goal.goal) * 100}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </ThemedView>
+          </Pressable>
+        </Link>
+      )}
 
       <Button
         title={reviewTitle}
@@ -88,4 +129,8 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
   },
   account: { marginTop: Spacing.five, textAlign: 'center' },
+  goal: { padding: Spacing.three, borderRadius: Spacing.two, gap: Spacing.two },
+  goalRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
+  track: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  progress: { height: '100%', borderRadius: 4 },
 });

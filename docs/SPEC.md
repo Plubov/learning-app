@@ -106,7 +106,11 @@ recommended. The app works without AI for plain reviewing.
 
 ## Gamification
 
-- Daily streak with a clear rule (at least all due reviews or N minutes).
+- Daily goal: a number of reviews per day (default 20, changeable on the
+  statistics screen). Reaching it shows a short celebration (🔥 with the
+  streak, a short vibration).
+- Daily streak: days in a row with the goal reached. Today only breaks it
+  once the day is over. Changing the goal never changes past days.
 - Reminder notifications at a user-chosen time.
 - Later: share card through the system share menu; accountability partners
   or small groups with shared streaks.

@@ -54,6 +54,7 @@ declare
   i uuid;
   c uuid;
   n int;
+  r jsonb;
 begin
   if auth.uid() is distinct from b then
     raise exception 'FAIL: not acting as user B';
@@ -101,8 +102,13 @@ begin
   if n <> 3 then raise exception 'FAIL: expected 3 cards for new vocab item, found %', n; end if;
   select id into c from public.cards where item_id = i and card_type = 'recognition';
 
-  -- record_review updates the card, appends the event, marks the item introduced.
-  perform public.record_review(
+  -- record_review updates the card, appends the event, marks the item introduced
+  -- and counts the review for today's goal (set to 1, so it is reached at once).
+  if (select daily_goal from public.profiles) <> 20 then
+    raise exception 'FAIL: new profile does not have the default goal of 20';
+  end if;
+  update public.profiles set daily_goal = 1;
+  r := public.record_review(
     p_card_id => c,
     p_rating => 3::smallint,
     p_reviewed_at => now(),
@@ -110,8 +116,18 @@ begin
       "stability": 1.5, "stability_fast": 1.2, "difficulty": 5, "scheduled_days": 1,
       "learning_step": 0, "state": 2, "schedule_status": "review", "reps": 1, "lapses": 0}'::jsonb,
     p_correct => true,
-    p_response => '{"type": "text", "value": "apple"}'::jsonb
+    p_response => '{"type": "text", "value": "apple"}'::jsonb,
+    p_time_zone => 'Not/A_Zone' -- unknown: falls back to the profile's, review still saved
   );
+  if r <> '{"reviews_today": 1, "goal": 1, "goal_reached": true}'::jsonb then
+    raise exception 'FAIL: record_review returned %', r;
+  end if;
+  -- B sees exactly one day of activity (not the days of A).
+  select count(*) into n from public.daily_activity
+  where reviews = 1 and new_items = 1 and goal_met_at is not null;
+  if n <> 1 or (select count(*) from public.daily_activity) <> 1 then
+    raise exception 'FAIL: daily_activity of B is wrong or includes other users';
+  end if;
   if not exists (select 1 from public.cards
                  where id = c and state = 2 and reps = 1 and due_at = '2030-01-02T00:00:00Z') then
     raise exception 'FAIL: record_review did not update the card';
@@ -248,6 +264,8 @@ begin
   if n <> 0 then raise exception 'FAIL: anon can see % profiles', n; end if;
   select count(*) into n from public.sources;
   if n <> 0 then raise exception 'FAIL: anon can see % sources', n; end if;
+  select count(*) into n from public.daily_activity;
+  if n <> 0 then raise exception 'FAIL: anon can see % days of activity', n; end if;
   begin
     perform public.review_stats('UTC', array['recognition'], 1);
     raise exception 'FAIL: anon can call review_stats';
