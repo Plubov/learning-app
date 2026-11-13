@@ -145,6 +145,14 @@ in one transaction updates the card's schedule, appends the event and sets
 `items.introduced_at` on the first review. The app does not write these
 three separately.
 
+The statistics screen reads its numbers from the database function
+`review_stats` (time zone, card types, number of days). It only reads and
+returns one jsonb value: today's reviews, "again" answers, study time and new
+words; reviews per day; items not started / learning / known (known = every
+card of the item in FSRS state review); cards due tomorrow and in the next
+7 days. Days are counted in the device's time zone. Counting happens in
+Postgres because the API returns at most 1000 rows per request.
+
 ### drawings (handwriting phase; not created before then)
 
 | column | type | note |

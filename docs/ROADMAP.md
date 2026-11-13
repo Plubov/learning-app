@@ -46,7 +46,7 @@ Project:
       (migration applied and in the repo; the app code may still be
       uncommitted on the first PC, check `git status` there)
 - [x] Daily cap for new items, with "Learn more"
-- [ ] Simple statistics screen
+- [x] Simple statistics screen
 
 ## M3 AI generation
 

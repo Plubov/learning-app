@@ -328,6 +328,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      review_stats: {
+        Args: { p_card_types: string[]; p_days?: number; p_time_zone: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

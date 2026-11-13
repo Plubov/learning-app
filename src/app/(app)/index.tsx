@@ -47,6 +47,7 @@ export default function DecksScreen() {
         onPress={() => router.push('/review')}
         disabled={dueCount === 0 && !today?.moreNewAvailable}
       />
+      <Button title="Statistics" variant="secondary" onPress={() => router.push('/stats')} />
       {!loading && decks?.length === 0 && (
         <ThemedText themeColor="textSecondary">
           No decks yet. Create one to start adding words.
