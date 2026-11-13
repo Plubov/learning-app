@@ -95,9 +95,10 @@ begin
   insert into public.items (deck_id, kind, term, meaning)
   values (d, 'vocab', '사과', 'apple') returning id into i;
 
-  -- The items trigger creates the cards (as B, through RLS).
+  -- The items trigger creates the cards (as B, through RLS): recognition,
+  -- production and, for vocab, listening.
   select count(*) into n from public.cards where item_id = i;
-  if n <> 2 then raise exception 'FAIL: expected 2 cards for new item, found %', n; end if;
+  if n <> 3 then raise exception 'FAIL: expected 3 cards for new vocab item, found %', n; end if;
   select id into c from public.cards where item_id = i and card_type = 'recognition';
 
   -- record_review updates the card, appends the event, marks the item introduced.
@@ -178,7 +179,7 @@ begin
   end if;
   select count(*) into n from public.cards c join public.items i on i.id = c.item_id
   where i.term = '물';
-  if n <> 2 then raise exception 'FAIL: imported item has % cards, expected 2', n; end if;
+  if n <> 3 then raise exception 'FAIL: imported item has % cards, expected 3', n; end if;
   if (select new_position from public.items where term = '물' and deck_id = d)
      >= (select new_position from public.items where term = '차' and deck_id = d) then
     raise exception 'FAIL: imported items do not get positions in the given order';
@@ -211,6 +212,27 @@ begin
   if exists (select 1 from public.sources where title = 'evil.md') then
     raise exception 'FAIL: failed import left a source behind';
   end if;
+
+  -- review_stats counts only B's rows: 2 reviews of 사과 today (above),
+  -- 사과 learning (its production card is still new), 물 and 차 not started.
+  declare
+    s jsonb := public.review_stats('Europe/Berlin', array['recognition', 'production'], 14);
+  begin
+    if s -> 'today' <> '{"reviews": 2, "again": 0, "duration_ms": 0, "new_items": 1}'::jsonb then
+      raise exception 'FAIL: review_stats today = %', s -> 'today';
+    end if;
+    if s -> 'items' <> '{"not_started": 2, "learning": 1, "known": 0}'::jsonb then
+      raise exception 'FAIL: review_stats items = %', s -> 'items';
+    end if;
+    if jsonb_array_length(s -> 'days') <> 14
+       or (s -> 'days' -> 13 ->> 'reviews')::int <> 2
+       or (s -> 'days' -> 13 ->> 'date')::date <> (now() at time zone 'Europe/Berlin')::date then
+      raise exception 'FAIL: review_stats days = %', s -> 'days';
+    end if;
+    if s -> 'due' <> '{"tomorrow": 0, "next_7_days": 0}'::jsonb then
+      raise exception 'FAIL: review_stats due = %', s -> 'due';
+    end if;
+  end;
 end $$;
 
 -- Logged-out visitors (anon role) see nothing.
@@ -226,6 +248,11 @@ begin
   if n <> 0 then raise exception 'FAIL: anon can see % profiles', n; end if;
   select count(*) into n from public.sources;
   if n <> 0 then raise exception 'FAIL: anon can see % sources', n; end if;
+  begin
+    perform public.review_stats('UTC', array['recognition'], 1);
+    raise exception 'FAIL: anon can call review_stats';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 select 'all RLS checks passed' as result;
