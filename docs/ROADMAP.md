@@ -25,7 +25,7 @@ Project:
 - [x] Supabase CLI set up; first empty migration applied
 - [x] `.env` with Supabase URL and public key; `.env` is in `.gitignore`
 - [x] Fill in the Commands section of `CLAUDE.md`
-- [ ] First commit pushed; pulled successfully on the second machine
+- [x] First commit pushed; pulled successfully on the second machine
 
 ## M1 Review loop (target: daily Korean study starts here)
 
@@ -43,6 +43,8 @@ Project:
 - [x] Learning order for new words: topics mixed, phrases after their words
 - [x] Korean read aloud with device text-to-speech
 - [ ] Listening cards (hear the word, then answer)
+      (migration applied and in the repo; the app code may still be
+      uncommitted on the first PC, check `git status` there)
 - [x] Daily cap for new items, with "Learn more"
 - [ ] Simple statistics screen
 
