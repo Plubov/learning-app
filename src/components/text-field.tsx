@@ -1,13 +1,24 @@
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import type { Ref } from 'react';
+import {
+  StyleSheet,
+  TextInput,
+  View,
+  type TextInputInstance,
+  type TextInputProps,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-type TextFieldProps = TextInputProps & { label?: string };
+export type TextFieldProps = TextInputProps & {
+  label?: string;
+  /** Handle to the input, e.g. to focus it again from code. */
+  ref?: Ref<TextInputInstance>;
+};
 
 /** A themed text input with an optional label above it. */
-export function TextField({ label, style, multiline, ...rest }: TextFieldProps) {
+export function TextField({ label, style, multiline, ref, ...rest }: TextFieldProps) {
   const theme = useTheme();
   return (
     <View style={styles.wrapper}>
@@ -17,6 +28,7 @@ export function TextField({ label, style, multiline, ...rest }: TextFieldProps) 
         </ThemedText>
       )}
       <TextInput
+        ref={ref}
         placeholderTextColor={theme.textSecondary}
         multiline={multiline}
         style={[

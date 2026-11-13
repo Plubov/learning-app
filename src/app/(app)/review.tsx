@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/button';
 import { GoalCelebration } from '@/components/goal-celebration';
 import { Screen } from '@/components/screen';
-import { TextField } from '@/components/text-field';
+import { KoreanTextField } from '@/components/korean-text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -278,7 +278,7 @@ export default function ReviewScreen() {
         {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
         {!revealed && isProduction && (
-          <TextField
+          <KoreanTextField
             key={card.id} // a fresh, focused input for every card
             placeholder="한국어"
             value={answer}

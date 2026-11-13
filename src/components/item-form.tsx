@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { KoreanTextField } from '@/components/korean-text-field';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -88,7 +89,7 @@ export function ItemForm({ initial, submitTitle, onSubmit, clearOnSuccess }: Ite
         })}
       </View>
 
-      <TextField
+      <KoreanTextField
         label={kind === 'vocab' ? 'Korean' : 'Grammar point'}
         placeholder={kind === 'vocab' ? '사과' : '-아/어요'}
         value={term}

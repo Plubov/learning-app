@@ -48,7 +48,11 @@ Starting point: learner reads Hangul, knows a little basic vocabulary.
 
 Card types:
 - Recognition: Korean shown, recall the meaning.
-- Production: meaning shown, type the Korean in Hangul.
+- Production: meaning shown, type the Korean in Hangul. On the web (a
+  computer usually has no Korean keyboard installed) Korean fields type
+  Hangul from the Latin keys in the standard two-set layout (r = ㄱ, k = ㅏ)
+  and show an on-screen Korean keyboard; "한 → A" switches to Latin letters.
+  Phones and tablets use their own Korean keyboard.
 - Listening: Korean spoken by device text-to-speech, recall the meaning.
 
 Exercise types:
