@@ -50,7 +50,11 @@ const splitPair = (pairs: Record<string, string>, combined: string): string[] | 
   return key ? [...key] : null;
 };
 
-/** Key → jamo on a standard Korean keyboard (two-set layout, 두벌식). */
+/**
+ * Jamo of the standard Korean keyboard (two-set layout, 두벌식), named by the
+ * letter printed on the same key of a US keyboard. A Korean keyboard goes by
+ * key position, so other layouts are translated to these positions first.
+ */
 const KEY_TO_JAMO: Record<string, string> = {
   q: 'ㅂ', w: 'ㅈ', e: 'ㄷ', r: 'ㄱ', t: 'ㅅ', y: 'ㅛ', u: 'ㅕ', i: 'ㅑ', o: 'ㅐ', p: 'ㅔ',
   a: 'ㅁ', s: 'ㄴ', d: 'ㅇ', f: 'ㄹ', g: 'ㅎ', h: 'ㅗ', j: 'ㅓ', k: 'ㅏ', l: 'ㅣ',
@@ -59,21 +63,68 @@ const KEY_TO_JAMO: Record<string, string> = {
   Q: 'ㅃ', W: 'ㅉ', E: 'ㄸ', R: 'ㄲ', T: 'ㅆ', O: 'ㅒ', P: 'ㅖ',
 };
 
-/**
- * Keyboard rows for the on-screen keyboard: [key, jamo, jamo with Shift].
- * Same positions as on a physical Korean keyboard.
- */
-export const KEYBOARD_ROWS: [string, string, string][][] = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'].map(
-  (row) => [...row].map((key) => [key, KEY_TO_JAMO[key], jamoForKey(key.toUpperCase()) ?? KEY_TO_JAMO[key]]),
-);
+/** Latin keyboard layouts of the computer; more can be added here. */
+export type KeyboardLayout = 'qwerty' | 'qwertz';
+
+/** The three letter rows as printed on each layout, left to right. */
+const LAYOUT_ROWS: Record<KeyboardLayout, string[]> = {
+  qwerty: ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'],
+  // German, Austrian, Swiss: Z and Y swap places.
+  qwertz: ['qwertzuiop', 'asdfghjkl', 'yxcvbnm'],
+};
+
+export const LAYOUT_NAMES: Record<KeyboardLayout, string> = {
+  qwerty: 'US (QWERTY)',
+  qwertz: 'German (QWERTZ)',
+};
+
+/** Languages whose usual keyboard is QWERTZ (German, Czech, Slovak, …). */
+const QWERTZ_LANGUAGES = ['de', 'cs', 'sk', 'hu', 'sl', 'hr'];
 
 /**
- * The jamo a key types, or null for keys that are not letters (digits,
- * space, punctuation stay as they are). Capital letters without a Shift
- * meaning (e.g. "A") type the same as small ones.
+ * A first guess for the layout from a language tag such as "de-DE", used
+ * until the learner picks one.
  */
-export function jamoForKey(key: string): string | null {
-  return KEY_TO_JAMO[key] ?? KEY_TO_JAMO[key.toLowerCase()] ?? null;
+export function layoutForLanguage(languageTag: string | undefined): KeyboardLayout {
+  const language = (languageTag ?? '').toLowerCase().split('-')[0];
+  return QWERTZ_LANGUAGES.includes(language) ? 'qwertz' : 'qwerty';
+}
+
+/** Printed letter on a layout → letter at the same position on a US keyboard. */
+function toUsPosition(letter: string, layout: KeyboardLayout): string | null {
+  const lower = letter.toLowerCase();
+  for (const [r, row] of LAYOUT_ROWS[layout].entries()) {
+    const column = row.indexOf(lower);
+    if (column >= 0) {
+      const us = LAYOUT_ROWS.qwerty[r][column];
+      return letter === lower ? us : us.toUpperCase();
+    }
+  }
+  return null;
+}
+
+/**
+ * Keyboard rows for the on-screen keyboard: [printed letter, jamo, jamo with
+ * Shift]. Same positions as on a physical Korean keyboard.
+ */
+export function keyboardRows(layout: KeyboardLayout): [string, string, string][][] {
+  return LAYOUT_ROWS[layout].map((row) =>
+    [...row].map((key) => {
+      const jamo = jamoForKey(key, layout) ?? '';
+      return [key, jamo, jamoForKey(key.toUpperCase(), layout) ?? jamo];
+    }),
+  );
+}
+
+/**
+ * The jamo a key types on the given layout, or null for keys that are not
+ * letters (digits, space, punctuation stay as they are). Capital letters
+ * without a Shift meaning (e.g. "A") type the same as small ones.
+ */
+export function jamoForKey(key: string, layout: KeyboardLayout = 'qwerty'): string | null {
+  const us = toUsPosition(key, layout);
+  if (!us) return null;
+  return KEY_TO_JAMO[us] ?? KEY_TO_JAMO[us.toLowerCase()] ?? null;
 }
 
 type Syllable = { initial: number; vowel: number; final: number };
@@ -166,9 +217,13 @@ export function deleteJamo(text: string): string {
  * - anything else (pasting, typing in the middle, a real Korean keyboard):
  *   kept as it is.
  */
-export function koreanTyping(previous: string, next: string): string {
+export function koreanTyping(
+  previous: string,
+  next: string,
+  layout: KeyboardLayout = 'qwerty',
+): string {
   if (next.length === previous.length + 1 && next.startsWith(previous)) {
-    const jamo = jamoForKey(next.slice(-1));
+    const jamo = jamoForKey(next.slice(-1), layout);
     return jamo ? appendJamo(previous, jamo) : next;
   }
   if (next.length === previous.length - 1 && previous.startsWith(next)) {

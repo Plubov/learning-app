@@ -52,6 +52,9 @@ Card types:
   computer usually has no Korean keyboard installed) Korean fields type
   Hangul from the Latin keys in the standard two-set layout (r = ㄱ, k = ㅏ)
   and show an on-screen Korean keyboard; "한 → A" switches to Latin letters.
+  Keys count by position, as on a real Korean keyboard, so the computer's
+  layout matters: US (QWERTY) or German (QWERTZ, Z and Y swapped). Chosen
+  per device, first guessed from the browser language.
   Phones and tablets use their own Korean keyboard.
 - Listening: Korean spoken by device text-to-speech, recall the meaning.
 

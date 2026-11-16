@@ -4,9 +4,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { KEYBOARD_ROWS } from '@/lib/hangul';
+import { keyboardRows, type KeyboardLayout } from '@/lib/hangul';
 
 type Props = {
+  /** The computer's keyboard layout: decides which letters the keys show. */
+  layout: KeyboardLayout;
   onJamo: (jamo: string) => void;
   onBackspace: () => void;
   onSpace: () => void;
@@ -17,7 +19,7 @@ type Props = {
  * also shows the Latin letter at the same place, which types the same jamo
  * on the computer's own keyboard. Shift applies to the next key only.
  */
-export function KoreanKeyboard({ onJamo, onBackspace, onSpace }: Props) {
+export function KoreanKeyboard({ layout, onJamo, onBackspace, onSpace }: Props) {
   const [shift, setShift] = useState(false);
 
   function press(jamo: string) {
@@ -27,7 +29,7 @@ export function KoreanKeyboard({ onJamo, onBackspace, onSpace }: Props) {
 
   return (
     <View style={styles.keyboard}>
-      {KEYBOARD_ROWS.map((row, index) => (
+      {keyboardRows(layout).map((row, index) => (
         <View key={index} style={styles.row}>
           {index === 2 && (
             <Key label="⇧" hint="Shift" active={shift} wide onPress={() => setShift(!shift)} />

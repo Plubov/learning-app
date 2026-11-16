@@ -1,8 +1,16 @@
-import { appendJamo, deleteJamo, jamoForKey, KEYBOARD_ROWS, koreanTyping } from '@/lib/hangul';
+import {
+  appendJamo,
+  deleteJamo,
+  jamoForKey,
+  keyboardRows,
+  koreanTyping,
+  layoutForLanguage,
+  type KeyboardLayout,
+} from '@/lib/hangul';
 
 /** Types the keys one by one, like on a Korean keyboard. */
-function typeKeys(keys: string, start = ''): string {
-  return [...keys].reduce((text, key) => koreanTyping(text, text + key), start);
+function typeKeys(keys: string, layout: KeyboardLayout = 'qwerty'): string {
+  return [...keys].reduce((text, key) => koreanTyping(text, text + key, layout), '');
 }
 
 describe('jamoForKey', () => {
@@ -115,10 +123,56 @@ describe('appendJamo', () => {
   });
 });
 
-describe('KEYBOARD_ROWS', () => {
+describe('keyboardRows', () => {
   test('three rows in keyboard order with Shift variants', () => {
-    expect(KEYBOARD_ROWS.map((row) => row.length)).toEqual([10, 9, 7]);
-    expect(KEYBOARD_ROWS[0][0]).toEqual(['q', 'ㅂ', 'ㅃ']);
-    expect(KEYBOARD_ROWS[1][0]).toEqual(['a', 'ㅁ', 'ㅁ']);
+    const rows = keyboardRows('qwerty');
+    expect(rows.map((row) => row.length)).toEqual([10, 9, 7]);
+    expect(rows[0][0]).toEqual(['q', 'ㅂ', 'ㅃ']);
+    expect(rows[1][0]).toEqual(['a', 'ㅁ', 'ㅁ']);
+  });
+
+  test('QWERTZ shows the German letters at the same positions', () => {
+    const rows = keyboardRows('qwertz');
+    expect(rows[0][5]).toEqual(['z', 'ㅛ', 'ㅛ']);
+    expect(rows[2][0]).toEqual(['y', 'ㅋ', 'ㅋ']);
+  });
+
+  test('every key of every layout has a jamo', () => {
+    for (const layout of ['qwerty', 'qwertz'] as const) {
+      for (const [, jamo] of keyboardRows(layout).flat()) expect(jamo).not.toBe('');
+    }
+  });
+});
+
+describe('German QWERTZ keyboard', () => {
+  test('Z and Y type what is at their position on a Korean keyboard', () => {
+    expect(jamoForKey('z', 'qwertz')).toBe('ㅛ');
+    expect(jamoForKey('y', 'qwertz')).toBe('ㅋ');
+    expect(jamoForKey('Z', 'qwertz')).toBe('ㅛ');
+  });
+
+  test('all other letters are the same as on QWERTY', () => {
+    expect(jamoForKey('r', 'qwertz')).toBe('ㄱ');
+    expect(jamoForKey('R', 'qwertz')).toBe('ㄲ');
+  });
+
+  test('typing words', () => {
+    // ㅛ is on the key printed Z, so "안녕하세요" ends in z, not y.
+    expect(typeKeys('dkssudgktpdz', 'qwertz')).toBe('안녕하세요');
+    expect(typeKeys('yhvl', 'qwertz')).toBe('코피');
+  });
+});
+
+describe('layoutForLanguage', () => {
+  test('German and neighbouring languages use QWERTZ', () => {
+    expect(layoutForLanguage('de-DE')).toBe('qwertz');
+    expect(layoutForLanguage('de')).toBe('qwertz');
+    expect(layoutForLanguage('cs-CZ')).toBe('qwertz');
+  });
+
+  test('others, and unknown, use QWERTY', () => {
+    expect(layoutForLanguage('en-US')).toBe('qwerty');
+    expect(layoutForLanguage('ko-KR')).toBe('qwerty');
+    expect(layoutForLanguage(undefined)).toBe('qwerty');
   });
 });
