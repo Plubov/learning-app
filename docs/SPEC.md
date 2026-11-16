@@ -92,10 +92,10 @@ AI is used in three places, and only there:
    weeks: the lessons in order, at their own pace. It is made again only
    when the learner asks for a change. Lessons already started are kept; the rest is replaced.
 2. A lesson's content, once per lesson, with the small model, when the
-   learner presses "Start lesson": an introduction in 4 to 8 short steps
-   (one idea each, written to be heard as well as read), key points and 4
-   to 10 items. The items become cards and enter the normal daily reviews.
-3. Practice, on demand, with the small model: fresh examples and 5 to 8
+   learner presses "Start lesson": an introduction of 3 to 5 cards (each one
+   idea: a headline, one sentence and one example, to be taken in at a
+   glance; no running text), key points and 4 to 10 items. The items become cards and enter the normal daily reviews.
+3. Practice, on demand, with the small model: 5 to 8
    questions (multiple choice, a typed answer, or, in language courses,
    building a sentence from word tiles), chosen and graded in difficulty
    from the learner's proficiency per item.
@@ -108,7 +108,7 @@ The lesson page is a short overview. Learning and practising each open as a
 full-screen session that shows one page at a time, with a progress bar, a
 close button and a sound switch on top and the action at the bottom.
 
-The guided run shows one thing at a time: the introduction steps, then the
+The guided run shows one thing at a time: the introduction cards, then the
 new items in pairs, each pair followed by a quick check ("which one fits?",
 built in the app from the lesson's own items), and the key points as a
 recap. With "Auto sound" on, each page is read aloud by the device's
@@ -116,14 +116,15 @@ text-to-speech, switching voice between the learner's language and the
 language being learned. The quick checks are a warm-up and are not stored;
 only practice answers and card reviews enter the learning record.
 
-A practice session shows the examples one per page, then the exercises. The
+A practice session opens with the lesson's items once more on one page
+(term and meaning; tap to hear), then goes straight to the exercises. The
 app adds its own exercises to the AI's questions, made from the lesson's
 items without AI: matching pairs (the four weakest items) and, in language
 courses, listening (hear the word, choose its meaning). After each answer a
 green or red panel gives the verdict, the right answer and the explanation,
 with a sound and a small animation. An exercise answered wrongly comes back
 once at the end. The session ends with a result page (right at the first
-try, accuracy, best streak) and confetti. Every answer, including each
+try, best streak, points earned) and confetti. Every answer, including each
 attempt at a pair, is stored in `review_events` with the kind of exercise
 in `response.exercise`.
 
@@ -140,11 +141,12 @@ A lesson has two marks: learned (the guided run was finished once) and done
 (the first finished practice session). The next lesson of a course is the
 first one in order that is not done.
 
-The home screen greets the learner and puts the next step first: a large
-card for the course worked on most recently, naming the next lesson, with a
-button that opens that lesson directly. Below it: today's reviews with the
-daily goal, the other courses (each with its own next-lesson button), and
-the word decks.
+The home screen greets the learner with their total points and streak, then
+shows today's goal (points and reviews, each with a progress bar) and the
+next step: a large card for the course worked on most recently, naming the
+next lesson, with a button that opens that lesson directly. Below it:
+today's reviews, the other courses (each with its own next-lesson button),
+and the word decks.
 
 The course screen shows the course as a path: every lesson is a round stop
 on a winding trail, every stage a signpost, the goal at the end. Finished
@@ -209,9 +211,18 @@ letting users pick their model needs no change to screens or prompts.
 
 ## Gamification
 
-- Daily goal: a number of reviews per day (default 20, changeable on the
-  statistics screen). Reaching it shows a short celebration (🔥 with the
-  streak, a short vibration).
+- Points: every answer earns points by how hard its kind of exercise is,
+  and a wrong answer earns none. A matched pair 2; a multiple choice, a
+  listening choice or a flashcard that is only looked at 5; a typed answer
+  (in practice or on a flashcard) 10; a sentence built from word tiles 15.
+  A flashcard earns its points unless it is rated "Again". The values live
+  in one place, the database function `event_points`.
+- Daily goal: two goals, and reaching either one completes the day: a
+  number of reviews (default 20) or a number of points (default 100), both
+  changeable on the statistics screen. Flashcard reviews earn points too,
+  so the points goal can be reached by reviews, by practice, or by a mix.
+  Reaching the day's goal shows a short celebration (🔥 with the streak, a
+  short vibration), in a review or a practice session.
 - Daily streak: days in a row with the goal reached. Today only breaks it
   once the day is over. Changing the goal never changes past days.
 - Reminder notifications at a user-chosen time.

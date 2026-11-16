@@ -41,8 +41,8 @@ type Revealed = {
   typed: { value: string; correct: boolean } | null;
 };
 
-/** What record_review returns (see the daily_goal_and_streak migration). */
-type ReviewResult = { reviews_today: number; goal: number; goal_reached: boolean };
+/** What record_review returns (see count_activity in the points migration). */
+type ReviewResult = { reviews_today: number; goal: number; points: number; goal_reached: boolean };
 
 /** Shown while the celebration is up; streak is null until it has loaded. */
 type Celebration = { streak: number | null };
@@ -62,6 +62,7 @@ export default function ReviewScreen() {
   const [shownAt, setShownAt] = useState(0); // when the current card appeared
   const [saving, setSaving] = useState(false);
   const [doneCount, setDoneCount] = useState(0);
+  const [points, setPoints] = useState(0); // earned in this session
   const [autoplay, setAutoplayState] = useState<boolean | null>(null); // null = loading
   // 0 = today's limit only; STUDY_MORE_COUNT after "Learn more".
   const [extraNew, setExtraNew] = useState(0);
@@ -174,7 +175,9 @@ export default function ReviewScreen() {
         <Screen>
           <ThemedText type="subtitle">Done for now</ThemedText>
           <ThemedText themeColor="textSecondary">
-            {doneCount === 0 ? 'No cards are due.' : `You reviewed ${doneCount} cards.`}
+            {doneCount === 0
+              ? 'No cards are due.'
+              : `You reviewed ${doneCount} cards and earned ⭐ ${points} points.`}
             {moreNewAvailable && ' Today’s new words are done.'}
           </ThemedText>
           {moreNewAvailable && (
@@ -253,7 +256,9 @@ export default function ReviewScreen() {
       return;
     }
     // jsonb arrives typed only as "Json"; its shape is fixed by the migration.
-    if ((data as unknown as ReviewResult | null)?.goal_reached) celebrate();
+    const result = data as unknown as ReviewResult | null;
+    if (result) setPoints(points + result.points);
+    if (result?.goal_reached) celebrate();
 
     const rest = queue.slice(1);
     // "Again" and learning steps are due within minutes: show them again at the end.
@@ -269,7 +274,7 @@ export default function ReviewScreen() {
       <Screen>
         <View style={styles.topRow}>
           <ThemedText type="small" themeColor="textSecondary">
-            {queue.length} left · {instruction}
+            {queue.length} left · ⭐ {points} · {instruction}
           </ThemedText>
           {autoplay !== null && (
             <Pressable onPress={toggleAutoplay} accessibilityRole="button" hitSlop={Spacing.two}>

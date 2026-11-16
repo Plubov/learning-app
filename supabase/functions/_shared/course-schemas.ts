@@ -43,8 +43,18 @@ export type CoursePlan = {
  */
 export type StepPart = { text: string; target: boolean };
 
-/** One short block of a lesson's introduction, shown (and read aloud) on its own. */
-export type LessonStep = { parts: StepPart[] };
+/**
+ * One card of a lesson's introduction, shown (and read aloud) on its own: a
+ * headline, the idea in one sentence (`parts`) and one example.
+ * Lessons prepared before the cards existed have steps with `parts` only.
+ */
+export type LessonStep = {
+  /** The idea in a few words. */
+  title?: string;
+  parts: StepPart[];
+  /** `text` is the example itself, `note` its translation or what it shows ('' when none). */
+  example?: { text: string; note: string } | null;
+};
 
 export type LessonContent = {
   /** ISO 639-1 code of the language the explanation is written in (the learner's). */
@@ -72,7 +82,6 @@ export const QUESTION_KINDS: readonly QuestionKind[] = ['choice', 'typed', 'buil
 
 /** Practice as the model writes it: questions point at items by list position. */
 export type Practice = {
-  examples: { text: string; explanation: string }[];
   questions: {
     item: number;
     kind: QuestionKind;
@@ -86,7 +95,6 @@ export type Practice = {
 
 /** Practice as stored on the lesson: questions carry the item's id. */
 export type StoredPractice = {
-  examples: Practice['examples'];
   questions: (Omit<Practice['questions'][number], 'item'> & { item_id: string })[];
 };
 
@@ -180,9 +188,14 @@ export const LIMITS = {
   solutionPages: 6,
   /** One uploaded file, in bytes (also the Storage bucket's limit). */
   uploadBytes: 10 * 1024 * 1024,
-  steps: 10,
-  /** Characters of one introduction step: two or three short sentences. */
-  stepText: 320,
+  /** Cards of one lesson's introduction. */
+  steps: 6,
+  /** Characters of a card's headline. */
+  stepTitle: 60,
+  /** Characters of a card's sentence. */
+  stepText: 200,
+  /** Characters of a card's example, and of the note under it. */
+  stepExample: 200,
   questions: 10,
   term: 120,
 } as const;
@@ -225,7 +238,9 @@ export const LESSON_CONTENT_SCHEMA = object({
   steps: {
     type: 'array',
     items: object({
+      title: text,
       parts: { type: 'array', items: object({ text, target: { type: 'boolean' } }) },
+      example: object({ text, note: text }),
     }),
   },
   key_points: textList,
@@ -241,7 +256,6 @@ export const LESSON_CONTENT_SCHEMA = object({
 });
 
 export const PRACTICE_SCHEMA = object({
-  examples: { type: 'array', items: object({ text, explanation: text }) },
   questions: {
     type: 'array',
     items: object({
@@ -414,7 +428,19 @@ export function validateLessonContent(
     if (!/^[a-z]{2,3}$/.test(lang)) throw new Invalid('lang is not a language code');
     const steps = list(content.steps, 'steps', 2, LIMITS.steps).map((entry, i) => {
       const where = `steps[${i}]`;
-      const parts = list(record(entry, where).parts, `${where}.parts`, 1, 12).map((piece, j) => {
+      const step = record(entry, where);
+      const title = str(step.title, `${where}.title`, LIMITS.stepTitle);
+      const given = record(step.example, `${where}.example`);
+      const exampleText = str(given.text, `${where}.example.text`, LIMITS.stepExample, true);
+      // A card without an example is allowed; a note without one says nothing.
+      const example =
+        exampleText === ''
+          ? null
+          : {
+              text: exampleText,
+              note: str(given.note, `${where}.example.note`, LIMITS.stepExample, true),
+            };
+      const parts = list(step.parts, `${where}.parts`, 1, 12).map((piece, j) => {
         const part = record(piece, `${where}.parts[${j}]`);
         if (typeof part.text !== 'string') throw new Invalid(`${where}.parts[${j}].text is not text`);
         if (typeof part.target !== 'boolean') {
@@ -427,9 +453,9 @@ export function validateLessonContent(
       const whole = parts.map((part) => part.text).join('').trim();
       if (whole === '') throw new Invalid(`${where} is empty`);
       if (whole.length > LIMITS.stepText) {
-        throw new Invalid(`${where} is longer than ${LIMITS.stepText} characters; split it into two steps`);
+        throw new Invalid(`${where} is longer than ${LIMITS.stepText} characters; say it in one short sentence`);
       }
-      return { parts: parts.filter((part) => part.text !== '') };
+      return { title, parts: parts.filter((part) => part.text !== ''), example };
     });
     return {
       lang,
@@ -453,13 +479,6 @@ export function validatePractice(
 ): Validated<Practice> {
   return run(() => {
     const practice = record(value, 'practice');
-    const examples = list(practice.examples, 'examples', 0, 6).map((entry, i) => {
-      const example = record(entry, `examples[${i}]`);
-      return {
-        text: str(example.text, `examples[${i}].text`, 600),
-        explanation: str(example.explanation, `examples[${i}].explanation`, 600, true),
-      };
-    });
     const questions = list(practice.questions, 'questions', 1, LIMITS.questions).map((entry, i) => {
       const where = `questions[${i}]`;
       const question = record(entry, where);
@@ -499,7 +518,7 @@ export function validatePractice(
         explanation: str(question.explanation, `${where}.explanation`, 600, true),
       };
     });
-    return { examples, questions };
+    return { questions };
   });
 }
 

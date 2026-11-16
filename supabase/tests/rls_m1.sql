@@ -122,12 +122,14 @@ begin
     p_response => '{"type": "text", "value": "apple"}'::jsonb,
     p_time_zone => 'Not/A_Zone' -- unknown: falls back to the profile's, review still saved
   );
-  if r <> '{"reviews_today": 1, "goal": 1, "goal_reached": true}'::jsonb then
+  -- A recognition card rated "good" earns 5 points.
+  if r <> '{"reviews_today": 1, "goal": 1, "goal_reached": true,
+            "points": 5, "points_today": 5, "points_goal": 100}'::jsonb then
     raise exception 'FAIL: record_review returned %', r;
   end if;
   -- B sees exactly one day of activity (not the days of A).
   select count(*) into n from public.daily_activity
-  where reviews = 1 and new_items = 1 and goal_met_at is not null;
+  where reviews = 1 and new_items = 1 and points = 5 and goal_met_at is not null;
   if n <> 1 or (select count(*) from public.daily_activity) <> 1 then
     raise exception 'FAIL: daily_activity of B is wrong or includes other users';
   end if;

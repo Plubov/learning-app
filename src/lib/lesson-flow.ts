@@ -3,7 +3,7 @@
  * read aloud. Pure functions (randomness is a parameter), so they can be
  * tested; the screen part is src/components/session/lesson-flow.tsx.
  *
- * Order of pages: the introduction steps one at a time, then the new items
+ * Order of pages: the introduction cards one at a time, then the new items
  * in small groups, each group followed by a quick check of those items, and
  * the key points as a recap at the end.
  */
@@ -93,6 +93,11 @@ export function buildFlow(
   return pages;
 }
 
+/** A headline or example with a full stop, so the voice pauses after it. */
+function sentence(text: string): string {
+  return /[.!?:。]$/.test(text) ? text : `${text}.`;
+}
+
 /** A stretch of text to be spoken with one voice. */
 export type SpeechSegment = { text: string; lang: string };
 
@@ -132,12 +137,18 @@ export function speechForPage(
       }
     };
     if (page.kind === 'step') {
+      const { title, parts, example } = page.step;
       if (targetLang === 'ko') {
-        explain(page.step.parts.map((part) => part.text).join(''));
+        if (title) explain(sentence(title));
+        explain(parts.map((part) => part.text).join(''));
+        if (example) explain(example.text);
       } else {
         // No script to tell the languages apart: the model's labels decide.
-        for (const part of page.step.parts) add(part.text, part.target ? targetLang : lang);
+        if (title) add(sentence(title), lang);
+        for (const part of parts) add(part.text, part.target ? targetLang : lang);
+        if (example) add(example.text, targetLang);
       }
+      // The example's translation is on screen, like the translation of a word.
     } else if (page.kind === 'item' || page.kind === 'check') {
       // The word only; its translation is on screen.
       const word = targetSpeech(page.item.term, targetLang);
@@ -148,7 +159,10 @@ export function speechForPage(
     return segments;
   }
   if (page.kind === 'step') {
-    for (const part of page.step.parts) add(part.text, lang);
+    const { title, parts, example } = page.step;
+    if (title) add(sentence(title), lang);
+    for (const part of parts) add(part.text, lang);
+    if (example) add(example.note === '' ? example.text : `${sentence(example.text)} ${example.note}`, lang);
   } else if (page.kind === 'item') {
     // Term and meaning in the learner's language; the colon makes the voice pause.
     add(`${page.item.term}: ${page.item.meaning}`, lang);

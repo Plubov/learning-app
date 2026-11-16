@@ -138,6 +138,44 @@ describe('speechForPage', () => {
     expect(speechForPage(page, null, null)).toEqual([]);
   });
 
+  it('reads a card: headline, sentence and example, not the translation', () => {
+    const page = {
+      kind: 'step' as const,
+      step: {
+        title: 'Asking for things',
+        parts: [
+          { text: 'Put ', target: false },
+          { text: '주세요', target: true },
+          { text: ' after the thing you want.', target: false },
+        ],
+        example: { text: '물 주세요.', note: 'Water, please.' },
+      },
+    };
+    expect(speechForPage(page, 'en', 'ko')).toEqual([
+      { text: 'Asking for things. Put', lang: 'en' },
+      { text: '주세요', lang: 'ko' },
+      { text: 'after the thing you want.', lang: 'en' },
+      { text: '물 주세요.', lang: 'ko' },
+    ]);
+  });
+
+  it('reads a card of another subject with its example and note', () => {
+    const page = {
+      kind: 'step' as const,
+      step: {
+        title: 'Force changes motion',
+        parts: [{ text: 'A body speeds up only while a force acts on it.', target: false }],
+        example: { text: 'A ball rolls on after the kick', note: 'No force is needed to keep moving.' },
+      },
+    };
+    expect(speechForPage(page, 'en', null)).toEqual([
+      {
+        text: 'Force changes motion. A body speeds up only while a force acts on it. A ball rolls on after the kick. No force is needed to keep moving.',
+        lang: 'en',
+      },
+    ]);
+  });
+
   it('reads term and meaning in one language for other subjects', () => {
     const page = { kind: 'item' as const, item: { id: 'x', term: 'Inertia', meaning: 'Resistance to change.', notes: null } };
     expect(speechForPage(page, 'en', null)).toEqual([

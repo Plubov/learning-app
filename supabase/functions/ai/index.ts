@@ -9,7 +9,7 @@
  * Tasks:
  *   plan_course        once per course, and again when the learner changes it
  *   prepare_lesson     once per lesson: explanation and items
- *   generate_practice  on demand: examples and a quiz for the learner's level
+ *   generate_practice  on demand: a quiz for the learner's level
  *   chat               one message to the tutor
  *   read_material      reads the next unread part of an uploaded file (photo,
  *                      scan, a few PDF pages) into text; called until all
@@ -552,7 +552,6 @@ async function generatePractice(ctx: Context, body: Body): Promise<void> {
   );
 
   const stored: StoredPractice = {
-    examples: practice.examples,
     questions: practice.questions.map(({ item, ...question }) => ({
       ...question,
       item_id: items[item].id,

@@ -1,5 +1,5 @@
 /**
- * Loads and changes the daily goal and streak. The counting rules are in
+ * Loads and changes the daily goals (reviews, points) and the streak. The counting rules are in
  * streak.ts; this file only talks to the database.
  */
 import { currentStreak, longestStreak, toIsoDate } from '@/lib/streak';
@@ -10,6 +10,12 @@ export type GoalStatus = {
   /** Reviews per day the learner aims for. */
   goal: number;
   todayReviews: number;
+  /** Points per day that count as the day's goal instead of the reviews. */
+  pointsGoal: number;
+  todayPoints: number;
+  /** All points ever earned. */
+  totalPoints: number;
+  /** Either goal reached today (reviews or points). */
   metToday: boolean;
   streak: number;
   longest: number;
@@ -17,16 +23,18 @@ export type GoalStatus = {
 
 export const MIN_DAILY_GOAL = 5;
 export const MAX_DAILY_GOAL = 500;
+export const MIN_DAILY_POINTS = 20;
+export const MAX_DAILY_POINTS = 2000;
 
 /** Enough days for any streak worth showing; also stays under the API's row limit. */
 const HISTORY_DAYS = 1000;
 
 export async function loadGoalStatus(): Promise<GoalStatus> {
   const [profile, days] = await Promise.all([
-    supabase.from('profiles').select('daily_goal').single(),
+    supabase.from('profiles').select('daily_goal, daily_points').single(),
     supabase
       .from('daily_activity')
-      .select('local_date, reviews, goal_met_at')
+      .select('local_date, reviews, points, goal_met_at')
       .order('local_date', { ascending: false })
       .limit(HISTORY_DAYS),
   ]);
@@ -41,6 +49,9 @@ export async function loadGoalStatus(): Promise<GoalStatus> {
   return {
     goal: profile.data.daily_goal,
     todayReviews: todayRow?.reviews ?? 0,
+    pointsGoal: profile.data.daily_points,
+    todayPoints: todayRow?.points ?? 0,
+    totalPoints: rows.reduce((sum, r) => sum + r.points, 0),
     metToday: todayRow?.goal_met_at != null,
     streak: currentStreak(metDates, today),
     longest: longestStreak(metDates),
@@ -53,6 +64,16 @@ export async function setDailyGoal(goal: number): Promise<void> {
   const { error } = await supabase
     .from('profiles')
     .update({ daily_goal: clamped })
+    .eq('user_id', await currentUserId());
+  if (error) throw new Error(error.message);
+}
+
+/** Changes the points goal from today on; days already finished keep theirs. */
+export async function setDailyPoints(points: number): Promise<void> {
+  const clamped = Math.min(MAX_DAILY_POINTS, Math.max(MIN_DAILY_POINTS, Math.round(points)));
+  const { error } = await supabase
+    .from('profiles')
+    .update({ daily_points: clamped })
     .eq('user_id', await currentUserId());
   if (error) throw new Error(error.message);
 }

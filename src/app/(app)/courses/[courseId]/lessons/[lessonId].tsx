@@ -6,7 +6,7 @@ import { Button } from '@/components/button';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { LessonFlow } from '@/components/session/lesson-flow';
-import { PracticeSession, type PracticeExample } from '@/components/session/practice-session';
+import { PracticeSession, type PracticeWord } from '@/components/session/practice-session';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -33,7 +33,7 @@ type View_ =
       kind: 'practice';
       /** Changes with every new session, so its state starts fresh. */
       key: number;
-      examples: PracticeExample[];
+      words: PracticeWord[];
       exercises: Exercise[];
       lang: string | null;
       completesLesson: boolean;
@@ -44,10 +44,10 @@ type Working = 'prepare' | 'practice' | null;
 /**
  * A lesson. The template is the same for every lesson:
  *   1. goals   2. Learn: the guided run (introduction steps, new items,
- *   quick checks)   3. Practice: examples and exercises for the learner's
- *   level   4. the words of the lesson with their proficiency.
+ *   quick checks)   3. Practice: the items once more, then exercises for the
+ *   learner's level   4. the words of the lesson with their proficiency.
  * AI only fills the slots: the introduction and items once (on "Start
- * lesson"), examples and questions each time new practice is requested.
+ * lesson"), the questions each time new practice is requested.
  */
 export default function LessonScreen() {
   const { courseId, lessonId } = useLocalSearchParams<{ courseId: string; lessonId: string }>();
@@ -86,7 +86,7 @@ export default function LessonScreen() {
     setView({
       kind: 'practice',
       key: new Date().getTime(),
-      examples: from.practice.examples,
+      words: from.items.map(({ id, term, meaning }) => ({ id, term, meaning })),
       exercises,
       lang: from.explanation ? explanationSteps(from.explanation).lang : null,
       completesLesson: !from.completed,
@@ -173,7 +173,7 @@ export default function LessonScreen() {
         <PracticeSession
           key={view.key}
           lessonId={lesson.id}
-          examples={view.examples}
+          words={view.words}
           exercises={view.exercises}
           lang={view.lang}
           targetLang={lesson.targetLang}

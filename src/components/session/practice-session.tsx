@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Vibration, View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { GoalCelebration } from '@/components/goal-celebration';
 import { Confetti } from '@/components/session/confetti';
 import {
   BuildExercise,
@@ -25,12 +26,14 @@ import { speakSegments, stopSpeaking } from '@/lib/speech';
 import { targetSpeech } from '@/lib/speech-text';
 import { supabase } from '@/lib/supabase';
 import { cleanText } from '@/lib/text';
+import { deviceTimeZone } from '@/lib/time-zone';
 
-export type PracticeExample = { text: string; explanation: string };
+/** An item of the lesson, shown once more before the exercises. */
+export type PracticeWord = { id: string; term: string; meaning: string };
 
 type Props = {
   lessonId: string;
-  examples: PracticeExample[];
+  words: PracticeWord[];
   exercises: Exercise[];
   /** The learner's language; null when unknown. */
   lang: string | null;
@@ -50,22 +53,28 @@ type Props = {
 };
 
 type Page =
-  | { kind: 'example'; example: PracticeExample }
+  /** The lesson's items at a glance, before the first exercise. */
+  | { kind: 'words' }
   /** `retry`: asked a second time at the end, after a wrong answer. */
   | { kind: 'exercise'; exercise: Exercise; retry: boolean };
+
+/** What record_quiz_answer returns (see the points migration). */
+type AnswerResult = { points: number; goal_reached: boolean };
 
 type Verdict = { correct: boolean; title: string; answer?: string; explanation?: string };
 
 /**
- * A practice session, one page at a time: first the fresh examples, then the
- * exercises with feedback after each, then the result with a celebration.
+ * A practice session, one page at a time: first the lesson's items once more
+ * on a single page, then the exercises with feedback after each, then the
+ * result with a celebration.
  * An exercise answered wrongly comes back once at the end. Every answer is
  * appended to the learning record (review_events, through
- * record_quiz_answer) as structured data, so it counts towards proficiency.
+ * record_quiz_answer) as structured data, so it counts towards proficiency,
+ * and earns points by the kind of exercise (decided in the database).
  */
 export function PracticeSession({
   lessonId,
-  examples,
+  words,
   exercises,
   lang,
   targetLang,
@@ -81,7 +90,7 @@ export function PracticeSession({
   const { t } = useT();
   const { sound, toggleSound } = useSoundSetting();
   const [queue, setQueue] = useState<Page[]>(() => [
-    ...examples.map((example): Page => ({ kind: 'example', example })),
+    ...(words.length > 0 ? [{ kind: 'words' } as Page] : []),
     ...exercises.map((exercise): Page => ({ kind: 'exercise', exercise, retry: false })),
   ]);
   const [index, setIndex] = useState(0);
@@ -92,6 +101,10 @@ export function PracticeSession({
   const [bestStreak, setBestStreak] = useState(0);
   const [finished, setFinished] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [points, setPoints] = useState(0); // earned in this session
+  const [goalReached, setGoalReached] = useState(false);
+  // Stable function, so the running celebration is not restarted on re-render.
+  const endCelebration = useCallback(() => setGoalReached(false), []);
   // When the current page appeared, for the answer time.
   const [shownAt, setShownAt] = useState(() => new Date().getTime());
   const { scale, pop } = usePop();
@@ -107,13 +120,10 @@ export function PracticeSession({
     if (korean !== '') speakSegments([{ text: korean, lang: targetLang, slow: true }]);
   }
 
-  /**
-   * An example: in a language course only its sentence in the language
-   * being learned; in other courses the whole example, calmly for study courses.
-   */
-  function speakExample(text: string) {
-    if (targetLang) speakTarget(text);
-    else if (lang) speakSegments([{ text, lang, calm }]);
+  /** A word of the list: the term in a language course, otherwise term and meaning. */
+  function speakWord(word: PracticeWord) {
+    if (targetLang) speakTarget(word.term);
+    else if (lang) speakSegments([{ text: `${word.term}: ${word.meaning}`, lang, calm }]);
   }
 
   useEffect(
@@ -126,9 +136,8 @@ export function PracticeSession({
   // What is heard when a page appears.
   useEffect(() => {
     if (!sound || finished) return;
-    if (page.kind === 'example') {
-      speakExample(page.example.text);
-    } else if (page.exercise.kind === 'listen') {
+    // The word list is not read out: it is a look back, heard by tapping a word.
+    if (page.kind === 'exercise' && page.exercise.kind === 'listen') {
       speakTarget(page.exercise.term);
     }
     // Speaks when a new page appears or sound is switched on.
@@ -137,7 +146,7 @@ export function PracticeSession({
 
   async function record(itemId: string, correct: boolean, kind: Exercise['kind'], value: string) {
     const now = new Date();
-    const { error } = await supabase.rpc('record_quiz_answer', {
+    const { data, error } = await supabase.rpc('record_quiz_answer', {
       p_lesson_id: lessonId,
       p_item_id: itemId,
       p_correct: correct,
@@ -149,7 +158,15 @@ export function PracticeSession({
       p_reviewed_at: now.toISOString(),
       p_duration_ms: now.getTime() - shownAt,
       p_device_id: await getDeviceId(),
+      p_time_zone: deviceTimeZone(),
     });
+    // jsonb arrives typed only as "Json"; its shape is fixed by the migration.
+    const result = data as unknown as AnswerResult | null;
+    if (result) {
+      // Added to the latest value: answers to pairs can arrive close together.
+      setPoints((sum) => sum + result.points);
+      if (result.goal_reached) setGoalReached(true);
+    }
     setSaveError(error ? t('session.saveError', { message: error.message }) : null);
   }
 
@@ -227,8 +244,8 @@ export function PracticeSession({
     const total = exercises.length;
     const stats = [
       { value: `${firstTry}/${total}`, label: t('session.firstTry') },
-      { value: `${total === 0 ? 100 : Math.round((firstTry / total) * 100)}%`, label: t('session.accuracy') },
       { value: `🔥 ${bestStreak}`, label: t('session.bestStreak') },
+      { value: `⭐ ${points}`, label: t('session.points') },
     ];
     return (
       <View style={styles.fill}>
@@ -272,13 +289,14 @@ export function PracticeSession({
           </View>
         </SessionLayout>
         <Confetti />
+        {goalReached && <GoalCelebration streak={null} onDone={endCelebration} />}
       </View>
     );
   }
 
   let footer = null;
-  if (page.kind === 'example') {
-    footer = <Button title={t('common.continue')} onPress={next} />;
+  if (page.kind === 'words') {
+    footer = <Button title={t('flow.startPractising')} onPress={next} />;
   } else if (verdict) {
     footer = (
       <>
@@ -293,36 +311,46 @@ export function PracticeSession({
   }
 
   return (
-    <SessionLayout
-      progress={index / queue.length}
-      sound={sound}
-      onToggleSound={toggleSound}
-      onClose={onClose}
-      footer={footer}>
-      <Appear key={index} style={styles.page}>
-        {page.kind === 'example' && (
+    <View style={styles.fill}>
+      <SessionLayout
+        progress={index / queue.length}
+        sound={sound}
+        onToggleSound={toggleSound}
+        onClose={onClose}
+        footer={footer}>
+        {page.kind === 'exercise' && (
+          <ThemedText type="smallBold" themeColor="textSecondary" style={styles.points}>
+            ⭐ {points}
+          </ThemedText>
+        )}
+        <Appear key={index} style={styles.page}>
+        {page.kind === 'words' && (
           <>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.label}>
-              {t('session.example')}
-            </ThemedText>
-            <ThemedView type="backgroundElement" style={styles.example}>
-              <ThemedText style={styles.exampleText}>{page.example.text}</ThemedText>
-              {page.example.explanation !== '' && (
-                <ThemedText themeColor="textSecondary">{page.example.explanation}</ThemedText>
-              )}
-              {(targetLang ?? lang) && (
+            <ThemedText style={styles.wordsTitle}>{t('session.wordsTitle')}</ThemedText>
+            {(targetLang ?? lang) && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {t('session.wordsHint')}
+              </ThemedText>
+            )}
+            <View style={styles.words}>
+              {words.map((word) => (
                 <Pressable
-                  onPress={() => {
-                    speakExample(page.example.text);
-                  }}
+                  key={word.id}
+                  onPress={() => speakWord(word)}
                   accessibilityRole="button"
-                  accessibilityLabel={t('common.readAloud')}
-                  hitSlop={Spacing.two}
-                  style={styles.replay}>
-                  <ThemedText style={styles.replayIcon}>🔊</ThemedText>
+                  accessibilityLabel={`${word.term}: ${word.meaning}`}
+                  style={({ pressed }) => [
+                    styles.word,
+                    { backgroundColor: theme.backgroundElement },
+                    pressed && styles.dimmed,
+                  ]}>
+                  <ThemedText style={[styles.wordTerm, { color: theme.tint }]}>{word.term}</ThemedText>
+                  <ThemedText themeColor="textSecondary" style={styles.wordMeaning}>
+                    {word.meaning}
+                  </ThemedText>
                 </Pressable>
-              )}
-            </ThemedView>
+              ))}
+            </View>
           </>
         )}
 
@@ -377,19 +405,31 @@ export function PracticeSession({
             onDone={pairsDone}
           />
         )}
-      </Appear>
-    </SessionLayout>
+        </Appear>
+      </SessionLayout>
+      {goalReached && <GoalCelebration streak={null} onDone={endCelebration} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  points: { alignSelf: 'flex-end' },
   page: { gap: Spacing.three },
   label: { textTransform: 'uppercase', letterSpacing: 0.5 },
-  example: { padding: Spacing.four, borderRadius: Spacing.three, gap: Spacing.three },
-  exampleText: { fontSize: 22, lineHeight: 32, fontWeight: 600 },
-  replay: { alignSelf: 'flex-start' },
-  replayIcon: { fontSize: 24, lineHeight: 32 },
+  wordsTitle: { fontSize: 26, lineHeight: 34, fontWeight: 700 },
+  words: { gap: Spacing.two },
+  word: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.three,
+  },
+  wordTerm: { flex: 1, fontSize: 20, lineHeight: 28, fontWeight: 700 },
+  wordMeaning: { flex: 1, textAlign: 'right' },
+  dimmed: { opacity: 0.6 },
   result: { alignItems: 'center', gap: Spacing.three },
   trophy: { fontSize: 88, lineHeight: 104 },
   center: { textAlign: 'center' },

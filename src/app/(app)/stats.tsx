@@ -10,8 +10,11 @@ import { useTheme } from '@/hooks/use-theme';
 import {
   loadGoalStatus,
   MAX_DAILY_GOAL,
+  MAX_DAILY_POINTS,
   MIN_DAILY_GOAL,
+  MIN_DAILY_POINTS,
   setDailyGoal,
+  setDailyPoints,
   type GoalStatus,
 } from '@/lib/daily-goal';
 import { SESSION_CARD_TYPES } from '@/lib/session-cards';
@@ -30,6 +33,7 @@ const CHART_DAYS = 14;
 const CHART_HEIGHT = 120;
 /** How much one press of − or + changes the daily goal. */
 const GOAL_STEP = 5;
+const POINTS_STEP = 10;
 
 export default function StatsScreen() {
   const theme = useTheme();
@@ -141,11 +145,15 @@ export default function StatsScreen() {
   );
 }
 
-/** Streak tiles and the − / + control for the number of reviews per day. */
+/**
+ * Streak and points tiles, and the − / + controls for the two daily goals:
+ * reviews per day and points per day.
+ */
 function DailyGoal({ status }: { status: GoalStatus }) {
   const theme = useTheme();
-  // The goal as last chosen on this screen; saved in the background.
+  // The goals as last chosen on this screen; saved in the background.
   const [goal, setGoal] = useState(status.goal);
+  const [pointsGoal, setPointsGoal] = useState(status.pointsGoal);
   const [error, setError] = useState<string | null>(null);
 
   function change(by: number) {
@@ -160,6 +168,18 @@ function DailyGoal({ status }: { status: GoalStatus }) {
     });
   }
 
+  function changePoints(by: number) {
+    const next = Math.min(MAX_DAILY_POINTS, Math.max(MIN_DAILY_POINTS, pointsGoal + by));
+    if (next === pointsGoal) return;
+    const previous = pointsGoal;
+    setPointsGoal(next);
+    setError(null);
+    setDailyPoints(next).catch((reason: unknown) => {
+      setPointsGoal(previous);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    });
+  }
+
   return (
     <>
       <ThemedText type="smallBold">Daily goal</ThemedText>
@@ -169,7 +189,27 @@ function DailyGoal({ status }: { status: GoalStatus }) {
           label={status.streak > 0 ? streakLabel(status.streak) : 'no streak yet'}
         />
         <Tile value={status.longest} label="longest streak (days)" />
+        <Tile value={`⭐ ${status.todayPoints}`} label="points today" />
+        <Tile value={`⭐ ${status.totalPoints}`} label="points in total" />
       </View>
+      <ThemedView type="backgroundElement" style={styles.goalRow}>
+        <StepButton
+          label="−"
+          onPress={() => changePoints(-POINTS_STEP)}
+          disabled={pointsGoal <= MIN_DAILY_POINTS}
+        />
+        <View style={styles.goalText}>
+          <ThemedText style={styles.tileValue}>{pointsGoal}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            points a day
+          </ThemedText>
+        </View>
+        <StepButton
+          label="+"
+          onPress={() => changePoints(POINTS_STEP)}
+          disabled={pointsGoal >= MAX_DAILY_POINTS}
+        />
+      </ThemedView>
       <ThemedView type="backgroundElement" style={styles.goalRow}>
         <StepButton label="−" onPress={() => change(-GOAL_STEP)} disabled={goal <= MIN_DAILY_GOAL} />
         <View style={styles.goalText}>
@@ -182,8 +222,9 @@ function DailyGoal({ status }: { status: GoalStatus }) {
       </ThemedView>
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
       <ThemedText type="small" themeColor="textSecondary">
-        Reach the goal each day to keep your streak. A new goal applies from today; finished
-        days keep theirs.
+        Reach one of the two goals each day to keep your streak. Points: a pair matched 2, a
+        choice or a card you only look at 5, a typed answer 10, a sentence built from tiles 15;
+        wrong answers give none. A new goal applies from today; finished days keep theirs.
       </ThemedText>
     </>
   );

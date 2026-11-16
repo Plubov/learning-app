@@ -47,7 +47,7 @@ export function prepareLesson(lessonId: string): Promise<void> {
 }
 
 /**
- * Writes fresh examples and a quiz for a lesson.
+ * Writes a fresh quiz for a lesson.
  * @param proficiency 0..1 per item id (see proficiency.ts); decides what is
  *   practised and how hard.
  */

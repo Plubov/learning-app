@@ -1,7 +1,7 @@
 /**
  * The prompts for each AI task. Pure functions from data to text, no provider
- * names. The fixed frame of a lesson (objectives, introduction steps, items,
- * examples, quiz) is the app's template; the model only fills the slots.
+ * names. The fixed frame of a lesson (objectives, introduction cards, items,
+ * quiz) is the app's template; the model only fills the slots.
  */
 import { ITEM_KINDS, LIMITS, type AppLanguage, type Subject } from '../_shared/course-schemas.ts';
 
@@ -58,7 +58,7 @@ What a plan is:
 - Lessons in study order, each placed in a stage (index into the stages, from 0) and in a week of the course (from 1). Stages and weeks never go backwards along the list.
 
 How lessons are used, which decides what makes a good one:
-- A lesson is one sitting: a short explanation, 4 to 10 new items (words, grammar points, facts, concepts or methods) that become flashcards, a few examples and a quiz. Size each lesson so that this fits the learner's daily time.
+- A lesson is one sitting: 3 to 5 cards that each present one idea with an example, 4 to 10 new items (words, grammar points, facts, concepts or methods) that become flashcards, and a quiz. Size each lesson so that this fits the learner's daily time.
 - The flashcards are reviewed on the days in between, and reviews take most of the daily time. Plan 2 to 4 new lessons per week, fewer when the daily time is short.
 - Each lesson's content is written later by a smaller model that sees only the lesson's title, summary and objectives plus the list of lesson titles. So make each lesson specific: the summary names the actual content to cover, and the objectives are things the learner can be tested on.
 - Lessons build on each other: nothing is used before the lesson that introduces it.
@@ -125,11 +125,18 @@ export function lessonSystem(subject: Subject, targetLang: string): string {
     subject === 'language'
       ? `Every word or sentence in the language being learned (code "${targetLang}") is a part of its own with target true; everything else has target false. The app uses this to read each part with the right voice, so never mix the two languages inside one part, and never put a romanisation into a target part.`
       : 'target is false for every part.';
-  return `You write one lesson of a self-study course in a spaced-repetition learning app. The learner goes through the lesson on a phone the way they would through a language-learning game: the app shows one short step at a time and reads it aloud, the learner taps to continue, then the new items appear one by one with a quick check in between. Each item becomes flashcards (the app shows the meaning and asks for the term, and the other way round), so the items are what the learner will actually remember from the lesson.
+  const exampleRule =
+    subject === 'language'
+      ? `example.text is one word, phrase or short sentence in the language being learned (code "${targetLang}") that shows the idea, with nothing else in it; example.note is its translation.`
+      : 'example.text is one concrete instance of the idea: a formula, a number worked out, or a case from everyday life; example.note says in a few words what it shows, or is empty when the example speaks for itself.';
+  return `You write one lesson of a self-study course in a spaced-repetition learning app. The learner goes through the lesson on a phone: the app shows the introduction as a few cards, one at a time, then the new items one by one with a quick check in between. Each item becomes flashcards (the app shows the meaning and asks for the term, and the other way round), so the items are what the learner will actually remember from the lesson.
 
-- steps: the introduction, as 4 to 8 steps. A step is one idea in one or two short sentences, at most 200 characters, in plain text without markdown, lists or headings. Write the way a friendly tutor talks to one person: address the learner as "you", use everyday words, and keep it light. Open with a situation or a question that makes the learner want to know the answer, not with a definition or an overview of the lesson. Then build the idea up one step at a time, each step adding one thing, with a concrete example as early as possible. The last step leads into the items. The steps are heard as well as read, so write sentences that sound natural spoken: no brackets, slashes, arrows, abbreviations or tables.
-- A step is a list of parts that the app joins exactly as written, so the spaces between words belong inside the parts. ${targetRule}
-- lang: the two-letter code of the language the steps are written in (for example "en").
+- steps: the introduction, as 3 to 5 cards. A card presents one idea of the lesson so that it can be taken in at a glance: a headline, one sentence and one example. The learner should be able to read a card in a few seconds, so leave out everything that is not the idea itself: no greeting, no scene-setting, no rhetorical questions, no comparisons or images, no announcement of what the lesson will cover, and no lead-in to the next card. The details belong to the items, which follow the cards; the cards give the few ideas that hold the items together.
+- title: the card's headline, 2 to 5 words that name the idea itself ("Verbs come last", "Force changes motion"), not its place in the lesson ("Introduction", "Step 2").
+- parts: the idea in one plain sentence of at most 120 characters, stated directly as the rule or fact, in everyday words. The sentence is a list of parts that the app joins exactly as written, so the spaces between words belong inside the parts. ${targetRule}
+- example: ${exampleRule} Each is at most 100 characters. Both are empty only when the idea truly has no example.
+- Everything on a card is plain text without markdown, and it is read aloud as well as shown, so write no brackets, slashes, arrows or abbreviations in the sentence and the note.
+- lang: the two-letter code of the language the cards are written in (for example "en").
 - Stay inside this lesson's summary and objectives; earlier lessons can be assumed, later ones must not be anticipated.
 - key_points: three to five short sentences the learner should be able to say back after the lesson. They are shown as the recap at the end.
 - items: 4 to 10 items that together cover the objectives. kind is one of: ${kinds}.
@@ -173,15 +180,13 @@ function materialBlock(material: string): string {
 
 // --- Practice ----------------------------------------------------------------
 
-export const PRACTICE_SYSTEM = `You write a practice round for one lesson of a self-study course: a few fresh examples and a short quiz. The learner has seen the lesson; the app tells you how well they currently know each of its items (proficiency from 0 to 100, from their flashcard reviews and earlier quiz answers).
+export const PRACTICE_SYSTEM = `You write a practice round for one lesson of a self-study course: a short quiz. The learner has seen the lesson, and the app shows its items once more before the first question; the app tells you how well they currently know each of its items (proficiency from 0 to 100, from their flashcard reviews and earlier quiz answers).
 
 Use the proficiency to decide what to practise and how hard:
 - Give the weakest items the most questions; every item with proficiency under 50 gets at least one, as far as the question count allows. Strong items get at most one, and it should be demanding.
 - Below about 40: recognition. Multiple choice with clearly wrong but plausible distractors, close to how the item was taught.
 - About 40 to 75: recall and use. Typed answers, or multiple choice in a new context.
 - Above about 75: application. A new sentence or situation, a combination of two items, or a question about why or when.
-
-Examples (2 to 4): new sentences, worked cases or situations that show the weaker items in use, each with a one-line explanation. Do not reuse the examples from the item notes.
 
 The app adds matching pairs and listening exercises from the items by itself, so do not write questions of those kinds.
 

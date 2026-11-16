@@ -2,7 +2,8 @@
  * Daily goal and streak: pure functions on calendar dates in "YYYY-MM-DD"
  * form (no database or device access, so they can be unit tested).
  *
- * Rule: a day counts when its goal (a number of reviews) was met. The streak
+ * Rule: a day counts when one of its two goals was met: the number of
+ * reviews, or the number of points (earned by reviews and by practice). The streak
  * is the number of days in a row that count, ending today, or ending
  * yesterday while today's goal is not met yet (the streak is not lost until
  * the day is over).
@@ -50,6 +51,19 @@ export function longestStreak(metDates: readonly string[]): number {
 export function goalProgress(reviews: number, goal: number): number {
   if (goal <= 0) return 1;
   return Math.min(1, Math.max(0, reviews / goal));
+}
+
+/**
+ * Progress towards today counting for the streak, between 0 and 1: the
+ * further of the two goals, because reaching either one is enough.
+ */
+export function dayProgress(
+  reviews: number,
+  goal: number,
+  points: number,
+  pointsGoal: number,
+): number {
+  return Math.max(goalProgress(reviews, goal), goalProgress(points, pointsGoal));
 }
 
 /** "1-day streak", "5-day streak". */

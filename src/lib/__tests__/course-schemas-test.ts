@@ -100,13 +100,19 @@ describe('validateLessonContent', () => {
   const content = {
     lang: 'EN',
     steps: [
-      { parts: [{ text: 'How do you say hello to a stranger?', target: false }] },
       {
+        title: 'Two levels of politeness',
+        parts: [{ text: 'Korean greetings change with who you talk to.', target: false }],
+        example: { text: '', note: 'a note without an example' },
+      },
+      {
+        title: ' The polite hello ',
         parts: [
           { text: 'You say ', target: false },
           { text: '안녕하세요'.normalize('NFD'), target: true },
           { text: '.', target: false },
         ],
+        example: { text: '안녕하세요!'.normalize('NFD'), note: ' Hello! ' },
       },
     ],
     key_points: ['안녕하세요 is polite.'],
@@ -131,6 +137,13 @@ describe('validateLessonContent', () => {
     ]);
   });
 
+  it('cleans a card\'s headline and example, and drops an empty example', () => {
+    const result = validateLessonContent(content, 'language');
+    expect(result.ok && result.value.steps[0].example).toBeNull();
+    expect(result.ok && result.value.steps[1].title).toBe('The polite hello');
+    expect(result.ok && result.value.steps[1].example).toEqual({ text: '안녕하세요!', note: 'Hello!' });
+  });
+
   it('marks no text as the language being learned outside language courses', () => {
     const science = { ...content, items: [{ kind: 'fact', term: 'Inertia', meaning: 'x', notes: '' }] };
     const result = validateLessonContent(science, 'science');
@@ -138,10 +151,14 @@ describe('validateLessonContent', () => {
   });
 
   it.each([
-    ['a step that is too long', { steps: [content.steps[0], { parts: [{ text: 'x'.repeat(321), target: false }] }] }],
-    ['an empty step', { steps: [content.steps[0], { parts: [{ text: '  ', target: false }] }] }],
+    ['a step that is too long', { steps: [content.steps[0], { ...content.steps[1], parts: [{ text: 'x'.repeat(201), target: false }] }] }],
+    ['an empty step', { steps: [content.steps[0], { ...content.steps[1], parts: [{ text: '  ', target: false }] }] }],
     ['a single step', { steps: [content.steps[0]] }],
-    ['a part without target', { steps: [content.steps[0], { parts: [{ text: 'x' }] }] }],
+    ['too many steps', { steps: Array.from({ length: 7 }, () => content.steps[0]) }],
+    ['a part without target', { steps: [content.steps[0], { ...content.steps[1], parts: [{ text: 'x' }] }] }],
+    ['a step without a headline', { steps: [content.steps[0], { ...content.steps[1], title: ' ' }] }],
+    ['a step without the example field', { steps: [content.steps[0], { title: 'x', parts: content.steps[1].parts }] }],
+    ['an example that is too long', { steps: [content.steps[0], { ...content.steps[1], example: { text: 'x'.repeat(201), note: '' } }] }],
     ['a language name instead of a code', { lang: 'English' }],
   ])('rejects %s', (_name, overrides) => {
     expect(validateLessonContent({ ...content, ...overrides }, 'language').ok).toBe(false);
@@ -179,12 +196,12 @@ describe('validatePractice', () => {
   const typed = { item: 1, kind: 'typed', prompt: 'Type "tea".', options: [], answer: '차', explanation: '' };
 
   it('accepts choice and typed questions', () => {
-    const result = validatePractice({ examples: [], questions: [choice, typed] }, 2);
+    const result = validatePractice({ questions: [choice, typed] }, 2);
     expect(result.ok && result.value.questions.map((q) => q.kind)).toEqual(['choice', 'typed']);
   });
 
   it('ignores options on a typed question', () => {
-    const result = validatePractice({ examples: [], questions: [{ ...typed, options: ['x'] }] }, 2);
+    const result = validatePractice({ questions: [{ ...typed, options: ['x'] }] }, 2);
     expect(result.ok && result.value.questions[0].options).toEqual([]);
   });
 
@@ -197,7 +214,7 @@ describe('validatePractice', () => {
     ['an unknown kind', { ...choice, kind: 'essay' }],
     ['an empty prompt', { ...choice, prompt: '' }],
   ])('rejects %s', (_name, question) => {
-    expect(validatePractice({ examples: [], questions: [question] }, 2).ok).toBe(false);
+    expect(validatePractice({ questions: [question] }, 2).ok).toBe(false);
   });
 
   describe('build questions', () => {
@@ -211,7 +228,7 @@ describe('validatePractice', () => {
     };
 
     it('accepts a sentence and drops wrong words that are in it', () => {
-      const result = validatePractice({ examples: [], questions: [build] }, 2);
+      const result = validatePractice({ questions: [build] }, 2);
       expect(result.ok && result.value.questions[0].options).toEqual(['차', '밥']);
     });
 
@@ -219,16 +236,16 @@ describe('validatePractice', () => {
       ['a one-word answer', { ...build, answer: '물' }],
       ['a wrong "word" made of two words', { ...build, options: ['차 한 잔'] }],
     ])('rejects %s', (_name, question) => {
-      expect(validatePractice({ examples: [], questions: [question] }, 2).ok).toBe(false);
+      expect(validatePractice({ questions: [question] }, 2).ok).toBe(false);
     });
 
     it('rejects them outside language courses', () => {
-      expect(validatePractice({ examples: [], questions: [build] }, 2, 'science').ok).toBe(false);
+      expect(validatePractice({ questions: [build] }, 2, 'science').ok).toBe(false);
     });
   });
 
   it('rejects practice without questions', () => {
-    expect(validatePractice({ examples: [], questions: [] }, 2).ok).toBe(false);
+    expect(validatePractice({ questions: [] }, 2).ok).toBe(false);
   });
 });
 

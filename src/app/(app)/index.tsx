@@ -29,11 +29,12 @@ function settled<T>(promise: Promise<T>) {
 
 /**
  * Home. From top to bottom, in the order the learner needs it:
- *   1. greeting and streak
- *   2. the next lesson of the course worked on last, with a button straight
+ *   1. greeting, total points and streak
+ *   2. today's goal: points and reviews, either of which keeps the streak
+ *   3. the next lesson of the course worked on last, with a button straight
  *      into it
- *   3. today's reviews and the daily goal
- *   4. the other courses, then the word decks
+ *   4. today's reviews
+ *   5. the other courses, then the word decks
  */
 export default function HomeScreen() {
   const { session } = useSession();
@@ -106,7 +107,13 @@ export default function HomeScreen() {
         </View>
         {goal && (
           <Link href="/stats" asChild>
-            <Pressable accessibilityRole="button" accessibilityLabel={`${goal.streak}-day streak. Statistics`}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${t('home.totalPoints', { n: goal.totalPoints })}. ${goal.streak}-day streak. Statistics`}
+              style={styles.badges}>
+              <ThemedView type="backgroundElement" style={styles.streak}>
+                <ThemedText style={styles.streakText}>⭐ {goal.totalPoints}</ThemedText>
+              </ThemedView>
               <ThemedView type="backgroundElement" style={styles.streak}>
                 <ThemedText style={styles.streakText}>🔥 {goal.streak}</ThemedText>
               </ThemedView>
@@ -114,6 +121,32 @@ export default function HomeScreen() {
           </Link>
         )}
       </View>
+
+      {goal && (
+        <ThemedView type="backgroundElement" style={styles.card}>
+          <View style={styles.spread}>
+            <ThemedText style={styles.cardTitle}>{t('home.today.title')}</ThemedText>
+            {goal.metToday && (
+              <ThemedText type="smallBold" style={{ color: theme.tint }}>
+                {t('home.review.goalReached')}
+              </ThemedText>
+            )}
+          </View>
+          <ThemedText type="smallBold">
+            {t('home.today.points', { done: goal.todayPoints, goal: goal.pointsGoal })}
+          </ThemedText>
+          <ProgressBar value={goalProgress(goal.todayPoints, goal.pointsGoal)} />
+          <ThemedText type="smallBold">
+            {t('home.today.reviews', { done: goal.todayReviews, goal: goal.goal })}
+          </ThemedText>
+          <ProgressBar value={goalProgress(goal.todayReviews, goal.goal)} />
+          {!goal.metToday && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('home.today.hint')}
+            </ThemedText>
+          )}
+        </ThemedView>
+      )}
 
       {(error ?? coursesError ?? deckError) && (
         <ThemedText style={{ color: theme.danger }}>{error ?? coursesError ?? deckError}</ThemedText>
@@ -167,17 +200,7 @@ export default function HomeScreen() {
       )}
 
       <ThemedView type="backgroundElement" style={styles.card}>
-        <View style={styles.spread}>
-          <ThemedText style={styles.cardTitle}>{t('home.review.title')}</ThemedText>
-          {goal && (
-            <ThemedText type="small" themeColor="textSecondary">
-              {goal.metToday
-                ? t('home.review.goalReached')
-                : t('home.review.today', { done: goal.todayReviews, goal: goal.goal })}
-            </ThemedText>
-          )}
-        </View>
-        {goal && <ProgressBar value={goalProgress(goal.todayReviews, goal.goal)} />}
+        <ThemedText style={styles.cardTitle}>{t('home.review.title')}</ThemedText>
         <ThemedText themeColor="textSecondary">
           {dueCount > 0 ? t('home.review.due') : t('home.review.none')}
         </ThemedText>
@@ -188,8 +211,8 @@ export default function HomeScreen() {
           disabled={!canReview}
         />
         {goal?.metToday && decks && decks.length > 0 && (
-          // The daily goal counts all active decks together; once it is
-          // reached, the learner picks what to go on with.
+          // The day's goal is reached (by reviews of all active decks
+          // together, or by points); the learner picks what to go on with.
           <>
             <ThemedText type="small" themeColor="textSecondary">
               {t('home.keepGoing')}
@@ -388,6 +411,7 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   greeting: { fontSize: 28, lineHeight: 36, fontWeight: 700 },
+  badges: { flexDirection: 'row', gap: Spacing.two },
   streak: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: 999 },
   streakText: { fontSize: 18, lineHeight: 26, fontWeight: 700 },
 

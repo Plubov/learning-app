@@ -62,7 +62,7 @@ Project:
       and lessons, generated once
 - [x] Lesson template; explanation and items generated once per lesson
 - [x] Proficiency per item from cards and quiz answers
-- [x] Practice (examples, quiz) generated for the current proficiency
+- [x] Practice (quiz) generated for the current proficiency
 - [x] Tutor chat; plan changes proposed in chat and applied by the learner
 - [x] Review screen handles decks that are not Korean
 - [x] Course without a week schedule (own pace)
@@ -100,6 +100,8 @@ Project:
 
 - [x] daily_activity and streak; daily goal (reviews per day) with a
       celebration when it is reached
+- [x] Points per answer by kind of exercise; total and today's points on
+      the home screen; a daily points goal as a second way to complete the day
 - [ ] Development build (EAS) and push reminder notifications
 - [ ] More AI connections: OpenRouter, OpenAI-compatible endpoint
 

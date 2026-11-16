@@ -143,17 +143,41 @@ export function LessonFlow({ pages, lang, targetLang, calm, onDone, onClose }: P
 
         <ThemedView type="backgroundElement" style={styles.card}>
           {page.kind === 'step' && (
-            <ThemedText style={styles.stepText}>
-              {page.step.parts.map((part, i) =>
-                part.target ? (
-                  <ThemedText key={i} style={[styles.stepText, styles.target, { color: theme.tint }]}>
-                    {part.text}
+            <>
+              {page.step.title && <ThemedText style={styles.stepTitle}>{page.step.title}</ThemedText>}
+              <ThemedText style={page.step.title ? styles.stepLine : styles.stepText}>
+                {page.step.parts.map((part, i) =>
+                  part.target ? (
+                    <ThemedText
+                      key={i}
+                      style={[
+                        page.step.title ? styles.stepLine : styles.stepText,
+                        styles.target,
+                        { color: theme.tint },
+                      ]}>
+                      {part.text}
+                    </ThemedText>
+                  ) : (
+                    part.text
+                  ),
+                )}
+              </ThemedText>
+              {page.step.example && (
+                <View
+                  style={[
+                    styles.example,
+                    { backgroundColor: theme.background, borderLeftColor: theme.tint },
+                  ]}>
+                  <ThemedText type="smallBold" themeColor="textSecondary" style={styles.label}>
+                    {t('flow.example')}
                   </ThemedText>
-                ) : (
-                  part.text
-                ),
+                  <ThemedText style={styles.exampleText}>{page.step.example.text}</ThemedText>
+                  {page.step.example.note !== '' && (
+                    <ThemedText themeColor="textSecondary">{page.step.example.note}</ThemedText>
+                  )}
+                </View>
               )}
-            </ThemedText>
+            </>
           )}
 
           {page.kind === 'item' && (
@@ -220,6 +244,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepText: { fontSize: 22, lineHeight: 32 },
+  stepTitle: { fontSize: 26, lineHeight: 34, fontWeight: 700 },
+  stepLine: { fontSize: 18, lineHeight: 27 },
+  example: {
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    borderLeftWidth: 4,
+    gap: Spacing.one,
+  },
+  exampleText: { fontSize: 22, lineHeight: 32, fontWeight: 700 },
   target: { fontWeight: 700 },
   term: { fontSize: 36, lineHeight: 48, fontWeight: 700 },
   recapTitle: { fontSize: 20, lineHeight: 28, fontWeight: 700 },

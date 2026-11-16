@@ -246,6 +246,8 @@ export type Database = {
           id: string
           local_date: string
           new_items: number
+          points: number
+          points_goal: number
           reviews: number
           time_zone: string
           updated_at: string
@@ -259,6 +261,8 @@ export type Database = {
           id?: string
           local_date: string
           new_items?: number
+          points?: number
+          points_goal?: number
           reviews?: number
           time_zone: string
           updated_at?: string
@@ -272,6 +276,8 @@ export type Database = {
           id?: string
           local_date?: string
           new_items?: number
+          points?: number
+          points_goal?: number
           reviews?: number
           time_zone?: string
           updated_at?: string
@@ -525,6 +531,7 @@ export type Database = {
         Row: {
           created_at: string
           daily_goal: number
+          daily_points: number
           display_name: string | null
           push_token: string | null
           reminder_time: string | null
@@ -535,6 +542,7 @@ export type Database = {
         Insert: {
           created_at?: string
           daily_goal?: number
+          daily_points?: number
           display_name?: string | null
           push_token?: string | null
           reminder_time?: string | null
@@ -545,6 +553,7 @@ export type Database = {
         Update: {
           created_at?: string
           daily_goal?: number
+          daily_points?: number
           display_name?: string | null
           push_token?: string | null
           reminder_time?: string | null
@@ -685,6 +694,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      count_activity: {
+        Args: {
+          p_at: string
+          p_duration_ms: number
+          p_new_items: number
+          p_points: number
+          p_reviews: number
+          p_time_zone: string
+        }
+        Returns: Json
+      }
+      event_points: {
+        Args: {
+          p_card_type: string
+          p_correct: boolean
+          p_exercise: string
+          p_rating: number
+        }
+        Returns: number
+      }
       import_items: {
         Args: {
           p_deck_id: string
@@ -703,8 +732,9 @@ export type Database = {
           p_lesson_id: string
           p_response: Json
           p_reviewed_at: string
+          p_time_zone?: string
         }
-        Returns: undefined
+        Returns: Json
       }
       record_review: {
         Args: {

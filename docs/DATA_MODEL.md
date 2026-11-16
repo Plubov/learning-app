@@ -156,12 +156,12 @@ A goal turned into a plan. See "Courses" in SPEC.md.
 | week | int | timeline: week of the course, from 1; not shown when the course is not scheduled |
 | title, summary | text | |
 | objectives | jsonb | list of strings |
-| explanation | jsonb null | `{"lang", "steps": [{"parts": [{"text", "target"}]}], "key_points": [...]}`; written once. `lang` is the language of the text, `target` marks text in the language being learned (for reading aloud). Lessons prepared before 2026-11-16 have `{"intro", "key_points"}` |
+| explanation | jsonb null | `{"lang", "steps": [{"title", "parts": [{"text", "target"}], "example": {"text", "note"} or null}], "key_points": [...]}`; written once. Each step is one card of the introduction: a headline, the idea in one sentence (`parts`) and one example with its translation or what it shows (`note`). `lang` is the language of the text, `target` marks text in the language being learned (for reading aloud). Older lessons have steps with `parts` only (longer, spoken-style text), and lessons prepared before 2026-11-16 have `{"intro", "key_points"}`; the app shows all three |
 | prepared_at | timestamptz null | null = not started, no items yet |
 | learned_at | timestamptz null | first time the guided run ("Learn") was finished |
 | material_refs | jsonb null | study courses: the sections of the material this lesson is written from, `[{"source", "index"}]` |
 | material_at | timestamptz null | when those sections were chosen; material read later makes the choice stale |
-| practice | jsonb null | latest practice: `{"examples": [{"text", "explanation"}], "questions": [{"item_id", "kind": "choice", "typed" or "build", "prompt", "options", "answer", "explanation"}]}`; for "build", `answer` is the sentence and `options` the extra wrong words |
+| practice | jsonb null | latest practice: `{"questions": [{"item_id", "kind": "choice", "typed" or "build", "prompt", "options", "answer", "explanation"}]}`; for "build", `answer` is the sentence and `options` the extra wrong words. Practice written before 2026-11-16 also has `examples`, which the app no longer shows |
 | practice_at | timestamptz null | |
 | completed_at | timestamptz null | first finished practice session |
 
@@ -210,12 +210,21 @@ An exercise with three items writes three rows.
 Card reviews are saved through the database function `record_review`, which
 in one transaction updates the card's schedule, appends the event, sets
 `items.introduced_at` on the first review and updates the day's row in
-`daily_activity`. The app does not write these separately.
+`daily_activity` (through `count_activity`). The app does not write these
+separately.
 
 Quiz answers are saved through `record_quiz_answer` (lesson, item, correct,
 response, time): one event with rating 3 (correct) or 1 (wrong) and no card.
 They count towards proficiency but do not move a card's schedule, and they
-are not counted as reviews by the statistics or the daily goal.
+are not counted as reviews by the statistics or the reviews goal. They do
+earn points for their day (see `daily_activity`); `response.exercise` says
+which kind of exercise it was, which decides the points.
+
+What an answer is worth is decided by the database function
+`event_points(card_type, exercise, rating, correct)` and nowhere else: card
+reviews not rated "again" earn 5 (recognition) or 10 (production,
+listening); correct practice answers earn 2 (match, per pair), 5 (choice,
+listen), 10 (typed) or 15 (build).
 
 The statistics screen reads its numbers from the database function
 `review_stats` (time zone, card types, number of days). It only reads and
@@ -255,13 +264,18 @@ goal and streak (it could be rebuilt from the events).
 | new_items | int | items introduced that day |
 | duration_ms | bigint | sum of answer times |
 | goal | int | reviews needed that day; follows `profiles.daily_goal` until met, then fixed |
-| goal_met_at | timestamptz null | when the goal was reached; null = not reached |
+| points | int | points earned that day, by reviews and practice answers |
+| points_goal | int | points needed that day; follows `profiles.daily_points` until met, then fixed |
+| goal_met_at | timestamptz null | when the first of the two goals (reviews or points) was reached; null = not reached |
 
-Written only by `record_review`, in the same transaction as the review. The
-app passes the device's time zone (`p_time_zone`); an unknown name falls back
-to `profiles.timezone`. `record_review` returns
-`{"reviews_today", "goal", "goal_reached"}`; `goal_reached` is true only for
-the review that reached the goal, which shows the celebration.
+Written only by `count_activity`, which `record_review` and
+`record_quiz_answer` call in the same transaction as the event. The app
+passes the device's time zone (`p_time_zone`); an unknown name falls back
+to `profiles.timezone`. Both functions return
+`{"reviews_today", "goal", "points", "points_today", "points_goal", "goal_reached"}`:
+`points` is what this answer earned, and `goal_reached` is true only for
+the answer that reached the first of the two goals, which shows the
+celebration. The total of all points is the sum of `points` over the days.
 No delete policy: the history only disappears with the account.
 
 The streak is computed in the app (`src/lib/streak.ts`): days in a row with
@@ -296,7 +310,8 @@ role; the owner can read it. It also backs the daily limit per user.
 ### profiles
 `user_id` (primary key), `display_name`, `timezone` (IANA name, default
 'UTC'; the app keeps it equal to the device's), `reminder_time`,
-`daily_goal` (reviews per day, default 20), `push_token` null.
+`daily_goal` (reviews per day, default 20), `daily_points` (points per day,
+default 100; reaching either goal completes the day), `push_token` null.
 Created automatically for each new user by the `on_auth_user_created`
 trigger.
 
