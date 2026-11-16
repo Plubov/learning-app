@@ -55,6 +55,12 @@ works; do not add libraries or infrastructure without saying why.
   normalising and trimming.
 - When a decision changes the spec or data model, update the file in `docs/`
   in the same commit.
+- Learner-facing screens are designed, not only made to work: one thing per
+  page instead of long scrolling pages, short text, a clear main action,
+  immediate feedback (animation, sound), visible progress and a rewarding
+  end. Build them from the session parts in `src/components/session/`
+  (layout, option cards, feedback panel, confetti) so they look and behave
+  alike.
 
 ## Commands
 

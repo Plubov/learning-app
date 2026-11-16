@@ -1,6 +1,7 @@
 import {
   addDays,
   currentStreak,
+  dayProgress,
   goalProgress,
   longestStreak,
   toIsoDate,
@@ -88,5 +89,17 @@ describe('goalProgress', () => {
 
   test('a goal of 0 counts as reached', () => {
     expect(goalProgress(0, 0)).toBe(1);
+  });
+});
+
+describe('dayProgress', () => {
+  test('is the further of the two goals', () => {
+    expect(dayProgress(5, 20, 80, 100)).toBe(0.8);
+    expect(dayProgress(15, 20, 10, 100)).toBe(0.75);
+  });
+
+  test('one goal reached is enough', () => {
+    expect(dayProgress(0, 20, 120, 100)).toBe(1);
+    expect(dayProgress(20, 20, 0, 100)).toBe(1);
   });
 });

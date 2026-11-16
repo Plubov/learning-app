@@ -49,6 +49,7 @@ declare
   l2 uuid;
   i uuid;
   n int;
+  r jsonb;
   plan constant jsonb := '{
     "title": "Mechanics", "summary": "Newton''s laws.", "subject": "science", "target_lang": "",
     "stages": [{"title": "Basics", "outcome": "Explain the three laws."}],
@@ -156,6 +157,28 @@ begin
                    and rating = 1 and correct = false) then
     raise exception 'FAIL: record_quiz_answer did not append the event';
   end if;
+  -- Points: a wrong answer earns none; a correct typed answer earns 10 and
+  -- is added to the day. 10 points do not reach the goal of 100.
+  if (select points from public.daily_activity) <> 0 then
+    raise exception 'FAIL: a wrong quiz answer earned points';
+  end if;
+  r := public.record_quiz_answer(l1, i, true,
+    '{"type": "text", "value": "inertia", "exercise": "typed"}', now(), 900, null, 'Europe/Berlin');
+  if (r ->> 'points')::int <> 10 or (r ->> 'points_today')::int <> 10
+     or (r ->> 'points_goal')::int <> 100 or (r ->> 'goal_reached')::boolean
+     or (r ->> 'reviews_today')::int <> 0 then
+    raise exception 'FAIL: record_quiz_answer returned %', r;
+  end if;
+  -- The points goal alone makes the day count (lowered to 20: 10 + 15 for a built sentence).
+  update public.profiles set daily_points = 20;
+  r := public.record_quiz_answer(l1, i, true,
+    '{"type": "text", "value": "x", "exercise": "build"}', now(), 900, null, 'Europe/Berlin');
+  if (r ->> 'points')::int <> 15 or (r ->> 'points_today')::int <> 25
+     or not (r ->> 'goal_reached')::boolean
+     or not exists (select 1 from public.daily_activity
+                    where reviews = 0 and points = 25 and points_goal = 20 and goal_met_at is not null) then
+    raise exception 'FAIL: the points goal did not complete the day: %', r;
+  end if;
   begin
     perform public.record_quiz_answer(l2, i, true, '{"type": "text", "value": "x"}', now());
     raise exception 'FAIL: a quiz answer was recorded for an item of another lesson';
@@ -190,7 +213,7 @@ begin
   select count(*) into n from public.decks;
   if n <> 1 then raise exception 'FAIL: re-planning created a second deck'; end if;
   select count(*) into n from public.review_events where lesson_id = l1;
-  if n <> 1 then raise exception 'FAIL: re-planning lost quiz answers'; end if;
+  if n <> 3 then raise exception 'FAIL: re-planning lost quiz answers'; end if;
 
   -- Chat messages can be added but not edited.
   insert into public.course_messages (course_id, role, content) values (c, 'user', 'original');

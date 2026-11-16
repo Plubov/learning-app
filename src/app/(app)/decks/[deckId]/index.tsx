@@ -9,11 +9,13 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
 export default function DeckScreen() {
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
   const theme = useTheme();
+  const { t } = useT();
 
   // One request: the deck plus its items, newest first.
   const load = useCallback(
@@ -50,7 +52,15 @@ export default function DeckScreen() {
       <Stack.Screen options={{ title: deck?.name ?? '' }} />
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
-      <Button title="Add word" onPress={() => router.push(`/decks/${deckId}/items/new`)} />
+      <Button
+        title={`🗂️ ${t('deck.study')}`}
+        onPress={() => router.push({ pathname: '/review', params: { deckId } })}
+      />
+      <Button
+        title="Add word"
+        variant="secondary"
+        onPress={() => router.push(`/decks/${deckId}/items/new`)}
+      />
       <Button
         title="Import from RemNote"
         variant="secondary"

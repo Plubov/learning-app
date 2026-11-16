@@ -3,22 +3,30 @@
  * adapter files talks to an AiProvider and never names a company or a model.
  *
  * A request asks for a *tier*, not a model:
- *   'plan'  - the strong model, used once per course plan
+ *   'plan'  - the strong model, used once per course plan, and wherever a
+ *             mistake is costly: checking homework
  *   'light' - the small, cheap model for lesson content, practice and chat
+ *   'read'  - the model that reads uploaded files into text: many pages, so
+ *             speed and price matter, but formulas and handwriting must be right
  * The provider decides which model a tier means. Today that comes from the
  * function's secrets; when users choose their own model (ai_connections),
  * getProvider() is the one place that has to look at their choice.
  */
 import { AnthropicProvider } from './anthropic.ts';
 
-export type Tier = 'plan' | 'light';
+export type Tier = 'plan' | 'light' | 'read';
 
 export type AiMessage = { role: 'user' | 'assistant'; content: string };
+
+/** A file the model should look at: an image or a PDF, as base64. */
+export type AiAttachment = { mediaType: string; base64: string };
 
 export type AiRequest = {
   tier: Tier;
   system: string;
   messages: AiMessage[];
+  /** Files shown to the model together with the first message, in this order. */
+  attachments?: AiAttachment[];
   /** JSON Schema the answer must follow. */
   schema: Record<string, unknown>;
   maxTokens: number;

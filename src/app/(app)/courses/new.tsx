@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Screen } from '@/components/screen';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { planCourse } from '@/lib/ai';
 import { LIMITS } from '@/lib/course-content';
@@ -20,6 +22,8 @@ function wholeNumber(value: string, min: number, max: number): number | null {
 
 export default function NewCourseScreen() {
   const theme = useTheme();
+  // 'study' = a university course: material is uploaded first, then planned.
+  const [kind, setKind] = useState<'guided' | 'study'>('guided');
   const [goal, setGoal] = useState('');
   const [level, setLevel] = useState('');
   const [minutes, setMinutes] = useState('20');
@@ -56,6 +60,7 @@ export default function NewCourseScreen() {
     const course = await supabase
       .from('courses')
       .insert({
+        kind,
         goal: cleanText(goal),
         level: cleanOptionalText(level),
         minutes_per_day: minutesPerDay ?? 20,
@@ -74,7 +79,8 @@ export default function NewCourseScreen() {
     try {
       const id = courseId ?? (await createCourse());
       setCourseId(id);
-      await planCourse(id);
+      // A study course is planned from its files, which are added next.
+      if (kind === 'guided') await planCourse(id);
       // Replace, so "back" from the course goes home, not to this form.
       router.replace(`/courses/${id}`);
     } catch (reason) {
@@ -86,9 +92,41 @@ export default function NewCourseScreen() {
   const locked = busy || courseId !== null; // the course row is already saved
   return (
     <Screen>
+      <View style={styles.kinds}>
+        {(
+          [
+            { value: 'guided', icon: '🧭', title: 'Guided course', text: 'A plan from your goal' },
+            { value: 'study', icon: '🎓', title: 'University course', text: 'From your scripts, sheets and notes' },
+          ] as const
+        ).map((option) => (
+          <Pressable
+            key={option.value}
+            onPress={() => setKind(option.value)}
+            disabled={locked}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: kind === option.value }}
+            style={[
+              styles.kind,
+              {
+                backgroundColor: kind === option.value ? theme.tintSoft : theme.backgroundElement,
+                borderColor: kind === option.value ? theme.tint : theme.border,
+              },
+            ]}>
+            <ThemedText style={styles.kindIcon}>{option.icon}</ThemedText>
+            <ThemedText type="smallBold">{option.title}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+              {option.text}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </View>
       <TextField
-        label="What do you want to learn?"
-        placeholder="e.g. Hold a simple conversation in Korean on a trip next spring"
+        label={kind === 'study' ? 'Which course, and what do you need from it?' : 'What do you want to learn?'}
+        placeholder={
+          kind === 'study'
+            ? 'e.g. Analysis 2: pass the exam in February with a good grade'
+            : 'e.g. Hold a simple conversation in Korean on a trip next spring'
+        }
         value={goal}
         onChangeText={setGoal}
         editable={!locked}
@@ -117,6 +155,12 @@ export default function NewCourseScreen() {
         editable={!locked}
         keyboardType="number-pad"
       />
+      {kind === 'study' && (
+        <ThemedText type="small" themeColor="textSecondary">
+          Files (PDFs, scans of your notes, exercise sheets) are added in the next step. You can
+          also paste text here.
+        </ThemedText>
+      )}
       <TextField
         label="Course material (optional)"
         placeholder="Paste a syllabus, notes, a table of contents or a video transcript"
@@ -141,7 +185,7 @@ export default function NewCourseScreen() {
         </ThemedText>
       )}
       <Button
-        title={courseId ? 'Try again' : 'Create my plan'}
+        title={courseId ? 'Try again' : kind === 'study' ? 'Next: add material' : 'Create my plan'}
         onPress={submit}
         disabled={cleanText(goal) === '' || problem !== null}
         busy={busy}
@@ -149,3 +193,18 @@ export default function NewCourseScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  kinds: { flexDirection: 'row', gap: Spacing.two },
+  kind: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.one,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+  },
+  kindIcon: { fontSize: 32, lineHeight: 40 },
+  center: { textAlign: 'center' },
+});

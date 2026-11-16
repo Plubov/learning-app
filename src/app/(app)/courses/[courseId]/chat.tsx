@@ -34,22 +34,35 @@ export default function CourseChatScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
-    () =>
-      supabase
-        .from('course_messages')
-        .select('id, role, content, plan_change')
-        .eq('course_id', courseId)
-        .order('created_at', { ascending: false })
-        .limit(SHOWN_MESSAGES)
-        .then(({ data, error: loadError }) => ({
-          data: data ? [...data].reverse() : null,
-          error: loadError,
-        })),
+    async () => {
+      const [stored, course] = await Promise.all([
+        supabase
+          .from('course_messages')
+          .select('id, role, content, plan_change, created_at')
+          .eq('course_id', courseId)
+          .order('created_at', { ascending: false })
+          .limit(SHOWN_MESSAGES),
+        supabase.from('courses').select('planned_at').eq('id', courseId).maybeSingle(),
+      ]);
+      const failed = stored.error ?? course.error;
+      return {
+        data:
+          stored.data && !failed
+            ? { messages: [...stored.data].reverse(), plannedAt: course.data?.planned_at ?? null }
+            : null,
+        error: failed,
+      };
+    },
     // `reload` is not read inside: changing it re-runs the query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [courseId, reload],
   );
-  const { data: messages, error: loadError } = useFocusQuery(load);
+  const { data: chat, error: loadError } = useFocusQuery(load);
+  const messages = chat?.messages;
+  // A suggestion older than the current plan has been applied (or replaced by
+  // a later one), so its button is not offered again: every press plans the
+  // whole course anew.
+  const plannedAt = chat?.plannedAt ? Date.parse(chat.plannedAt) : null;
 
   async function send() {
     const message = cleanText(text);
@@ -73,6 +86,7 @@ export default function CourseChatScreen() {
     try {
       await planCourse(courseId, instructions);
       setApplied(messageId);
+      setReload((n) => n + 1);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -104,9 +118,10 @@ export default function CourseChatScreen() {
             <ThemedText>{message.content}</ThemedText>
           </ThemedView>
           {message.plan_change !== null &&
-            (applied === message.id ? (
+            (applied === message.id ||
+            (plannedAt !== null && Date.parse(message.created_at) < plannedAt) ? (
               <ThemedText type="small" themeColor="textSecondary">
-                Plan updated. Lessons you already started were kept.
+                The plan was updated after this suggestion. Lessons you already started were kept.
               </ThemedText>
             ) : (
               <Button

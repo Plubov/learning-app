@@ -90,3 +90,12 @@ export function isListeningUnlocked(listeningState: number, recognitionState: nu
   if (listeningState !== CARD_STATE.new) return true;
   return recognitionState !== undefined && recognitionState >= CARD_STATE.review;
 }
+
+/**
+ * The entries with the priority ones moved to the front; within each group
+ * the given order is kept. Used so the cards of a deck the learner marked as
+ * their priority come first in a session.
+ */
+export function priorityFirst<T>(entries: readonly T[], isPriority: (entry: T) => boolean): T[] {
+  return [...entries.filter(isPriority), ...entries.filter((entry) => !isPriority(entry))];
+}
