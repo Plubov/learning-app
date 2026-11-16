@@ -65,9 +65,27 @@ Project:
 - [x] Practice (examples, quiz) generated for the current proficiency
 - [x] Tutor chat; plan changes proposed in chat and applied by the learner
 - [x] Review screen handles decks that are not Korean
-- [ ] First real course tried end to end with an API key; prompts adjusted
+- [x] Course without a week schedule (own pace)
+- [x] Lesson as a guided run: short spoken steps, items one at a time,
+      quick checks
+- [x] Practice as a full-screen session: matching pairs, word tiles,
+      listening, feedback with sound and animation, result with confetti
+- [x] Course screen as a path of stops; home screen with the next lesson
+- [x] First real course tried end to end with an API key; prompts adjusted
 - [ ] Edit or delete a course; edit the goal
-- [ ] PDF upload as course material (Storage)
+- [x] PDF upload as course material (Storage)
+- [x] Study courses: material from PDFs and scans of handwritten notes,
+      lessons and practice made from it
+- [x] Homework: handwritten solution photographed, read and checked, or a
+      hint for the next step
+- [x] Study courses: each lesson written from the sections of the material
+      that belong to it
+- [x] Active and paused decks, priority, exam dates, studying one deck
+- [x] App language: English, German, Spanish, Korean (main screens)
+- [ ] App language: remaining screens (review, statistics, decks, import,
+      sign-in, tutor, material, homework) and error messages
+- [ ] Study courses: tasks suggested from the material; formulas rendered;
+      homework results in the knowledge model
 - [ ] Video courses (transcript first)
 - [ ] Usage and cost overview from ai_usage
 

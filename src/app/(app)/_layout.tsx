@@ -8,6 +8,7 @@ export default function AppLayout() {
       <Stack.Screen name="index" options={{ title: 'Learn' }} />
       <Stack.Screen name="review" options={{ title: 'Review' }} />
       <Stack.Screen name="stats" options={{ title: 'Statistics' }} />
+      <Stack.Screen name="voices" options={{ title: '' }} />
       <Stack.Screen name="decks/new" options={{ title: 'New deck' }} />
       <Stack.Screen name="decks/[deckId]/index" options={{ title: '' }} />
       <Stack.Screen name="decks/[deckId]/import" options={{ title: 'Import from RemNote' }} />
@@ -16,6 +17,10 @@ export default function AppLayout() {
       <Stack.Screen name="courses/new" options={{ title: 'New course' }} />
       <Stack.Screen name="courses/[courseId]/index" options={{ title: '' }} />
       <Stack.Screen name="courses/[courseId]/chat" options={{ title: 'Tutor' }} />
+      <Stack.Screen name="courses/[courseId]/materials" options={{ title: 'Material' }} />
+      <Stack.Screen name="courses/[courseId]/homework/index" options={{ title: 'Homework' }} />
+      <Stack.Screen name="courses/[courseId]/homework/new" options={{ title: 'Check a solution' }} />
+      <Stack.Screen name="courses/[courseId]/homework/[homeworkId]" options={{ title: 'Result' }} />
       <Stack.Screen name="courses/[courseId]/lessons/[lessonId]" options={{ title: '' }} />
     </Stack>
   );

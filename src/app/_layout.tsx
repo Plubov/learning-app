@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { LanguageProvider } from '@/lib/i18n';
 import { SessionProvider, useSession } from '@/lib/session';
 
 // Keep the splash screen up until we know whether someone is logged in,
@@ -13,9 +14,11 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <SessionProvider>
-        <RootNavigator />
-      </SessionProvider>
+      <LanguageProvider>
+        <SessionProvider>
+          <RootNavigator />
+        </SessionProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

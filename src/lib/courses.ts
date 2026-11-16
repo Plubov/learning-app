@@ -3,6 +3,7 @@
  * the proficiency rules are in proficiency.ts, the AI calls in ai.ts.
  */
 import type { LessonExplanation, Stage, StoredPractice } from '@/lib/course-content';
+import { courseProgress, type CourseProgress, type LessonProgress } from '@/lib/course-progress';
 import {
   average,
   proficiencyByItem,
@@ -27,6 +28,8 @@ export type CourseLesson = {
   title: string;
   summary: string;
   started: boolean;
+  /** The guided run ("Learn") was finished at least once. */
+  learned: boolean;
   completed: boolean;
   /** Average proficiency of the lesson's items, 0..1; 0 before it is started. */
   proficiency: number;
@@ -38,6 +41,12 @@ export type CourseOverview = {
   title: string | null;
   summary: string | null;
   stages: Stage[];
+  /** 'study' = a university course with uploaded material and homework. */
+  kind: 'guided' | 'study';
+    /** false = no week schedule: lessons in order, at the learner's own pace. */
+  scheduled: boolean;
+  /** The deck holding the course's cards, with its settings; null before the first plan. */
+  deck: { id: string; active: boolean; priority: boolean; examDate: string | null } | null;
   plannedAt: string | null;
   lessons: CourseLesson[];
 };
@@ -50,19 +59,28 @@ export async function loadCourseOverview(courseId: string): Promise<CourseOvervi
   const [course, lessons] = await Promise.all([
     supabase
       .from('courses')
-      .select('id, goal, title, summary, roadmap, planned_at')
+      .select('id, kind, goal, title, summary, roadmap, scheduled, planned_at, deck_id')
       .eq('id', courseId)
       .single(),
     supabase
       .from('lessons')
-      .select('id, position, week, stage, title, summary, prepared_at, completed_at')
+      .select('id, position, week, stage, title, summary, prepared_at, learned_at, completed_at')
       .eq('course_id', courseId)
       .order('position'),
   ]);
   const failed = course.error ?? lessons.error;
   if (failed) throw new Error(failed.message);
   if (!course.data) throw new Error('Course not found');
-  const lessonRows = lessons.data ?? [];
+    const lessonRows = lessons.data ?? [];
+  const deck = course.data.deck_id
+    ? await supabase
+        .from('decks')
+        .select('id, active, priority, exam_date')
+        .eq('id', course.data.deck_id)
+        .maybeSingle()
+    : null;
+  if (deck?.error) throw new Error(deck.error.message);
+
 
   // Proficiency only exists for started lessons: the others have no items yet.
   const startedIds = lessonRows.filter((l) => l.prepared_at !== null).map((l) => l.id);
@@ -105,6 +123,16 @@ export async function loadCourseOverview(courseId: string): Promise<CourseOvervi
     summary: course.data.summary,
     // Written by save_course_plan from validated output.
     stages: (course.data.roadmap ?? []) as Stage[],
+    kind: course.data.kind === 'study' ? 'study' : 'guided',
+        scheduled: course.data.scheduled,
+    deck: deck?.data
+      ? {
+          id: deck.data.id,
+          active: deck.data.active,
+          priority: deck.data.priority,
+          examDate: deck.data.exam_date,
+        }
+      : null,
     plannedAt: course.data.planned_at,
     lessons: lessonRows.map((l) => ({
       id: l.id,
@@ -114,6 +142,7 @@ export async function loadCourseOverview(courseId: string): Promise<CourseOvervi
       title: l.title,
       summary: l.summary,
       started: l.prepared_at !== null,
+      learned: l.learned_at !== null,
       completed: l.completed_at !== null,
       proficiency: byLesson[l.id] ?? 0,
     })),
@@ -138,22 +167,26 @@ export type LessonDetail = {
   explanation: LessonExplanation | null;
   practice: StoredPractice | null;
   started: boolean;
+  /** The guided run ("Learn") was finished at least once. */
+  learned: boolean;
   completed: boolean;
-  /** Language being learned ('ko', ...) or null for other subjects. */
+    /** Language being learned ('ko', ...) or null for other subjects. */
   targetLang: string | null;
+  /** A study (university) course: its lessons are read in the calm voice. */
+  study: boolean;
   items: LessonItem[];
 };
 
 export async function loadLessonDetail(lessonId: string): Promise<LessonDetail> {
   const lesson = await supabase
     .from('lessons')
-    .select('id, course_id, title, summary, objectives, explanation, practice, prepared_at, completed_at')
+    .select('id, course_id, title, summary, objectives, explanation, practice, prepared_at, learned_at, completed_at')
     .eq('id', lessonId)
     .single();
   if (lesson.error) throw new Error(lesson.error.message);
 
   const [course, items, answers] = await Promise.all([
-    supabase.from('courses').select('deck_id').eq('id', lesson.data.course_id).single(),
+    supabase.from('courses').select('deck_id, kind').eq('id', lesson.data.course_id).single(),
     supabase
       .from('items')
       .select(`id, kind, term, meaning, notes, cards(${CARD_COLUMNS})`)
@@ -200,8 +233,85 @@ export async function loadLessonDetail(lessonId: string): Promise<LessonDetail> 
     explanation: lesson.data.explanation as LessonExplanation | null,
     practice: lesson.data.practice as StoredPractice | null,
     started: lesson.data.prepared_at !== null,
+    learned: lesson.data.learned_at !== null,
     completed: lesson.data.completed_at !== null,
-    targetLang,
+        targetLang,
+    study: course.data?.kind === 'study',
     items: itemRows.map(({ cards: _cards, ...item }) => ({ ...item, proficiency: scores[item.id] })),
   };
+}
+
+/** A course as the home screen shows it: its name and where the learner stands. */
+export type HomeCourse = CourseProgress & {
+  id: string;
+  title: string;
+    /** false while the course has no plan yet (planning failed or was interrupted). */
+  planned: boolean;
+  /** The learner marked the course (its deck) as their priority. */
+  priority: boolean;
+};
+
+/** All courses: priority ones first, then the one worked on most recently. */
+export async function loadHomeCourses(): Promise<HomeCourse[]> {
+  const starred = await supabase.from('decks').select('id').eq('priority', true);
+  if (starred.error) throw new Error(starred.error.message);
+  const priorityDecks = new Set((starred.data ?? []).map((deck) => deck.id));
+  const { data, error } = await supabase
+    .from('courses')
+    .select(
+      'id, title, goal, planned_at, created_at, deck_id, lessons(id, position, title, prepared_at, learned_at, completed_at)',
+    )
+    .order('created_at', { ascending: false })
+    .overrideTypes<
+      {
+        id: string;
+        title: string | null;
+        goal: string;
+                planned_at: string | null;
+        created_at: string;
+        deck_id: string | null;
+        lessons: LessonProgress[];
+      }[],
+      { merge: false }
+    >();
+  if (error) throw new Error(error.message);
+  return (data ?? [])
+    .map((course) => {
+      const progress = courseProgress(course.lessons);
+      return {
+        ...progress,
+        // A course never opened sorts by when it was created.
+        lastActivity: progress.lastActivity || Date.parse(course.created_at),
+        id: course.id,
+        title: course.title ?? course.goal,
+                planned: course.planned_at !== null,
+        priority: course.deck_id !== null && priorityDecks.has(course.deck_id),
+      };
+    })
+    .sort((a, b) => Number(b.priority) - Number(a.priority) || b.lastActivity - a.lastActivity);
+}
+
+/** Records that the guided run of a lesson was finished (the first time only). */
+export async function markLessonLearned(lessonId: string): Promise<void> {
+  const { error } = await supabase
+    .from('lessons')
+    .update({ learned_at: new Date().toISOString() })
+    .eq('id', lessonId)
+    .is('learned_at', null);
+  if (error) throw new Error(error.message);
+}
+
+/** Turns off the week schedule of a course: lessons in order, at the learner's pace. */
+export async function removeSchedule(courseId: string): Promise<void> {
+  const { error } = await supabase.from('courses').update({ scheduled: false }).eq('id', courseId);
+  if (error) throw new Error(error.message);
+}
+
+/** Changes a deck's study settings: in the daily session or paused, priority, exam date. */
+export async function updateDeck(
+  deckId: string,
+  change: { active?: boolean; priority?: boolean; exam_date?: string | null },
+): Promise<void> {
+  const { error } = await supabase.from('decks').update(change).eq('id', deckId);
+  if (error) throw new Error(error.message);
 }

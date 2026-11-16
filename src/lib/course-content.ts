@@ -7,7 +7,13 @@ import type { StoredPractice } from '../../supabase/functions/_shared/course-sch
 
 export {
   LIMITS,
+  wordKey,
   type LessonExplanation,
+  type HomeworkMode,
+  type HomeworkResult,
+  type HomeworkVerdict,
+  type LessonStep,
+  type SourceRole,
   type StoredPractice,
 } from '../../supabase/functions/_shared/course-schemas';
 

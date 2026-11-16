@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -13,6 +13,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { loadGoalStatus } from '@/lib/daily-goal';
 import { getDeviceId } from '@/lib/device-id';
+import { examSettings } from '@/lib/exam';
 import { isDueInSession } from '@/lib/review-session';
 import {
   createScheduler,
@@ -48,7 +49,12 @@ type Celebration = { streak: number | null };
 
 export default function ReviewScreen() {
   const theme = useTheme();
+  // With a deck id only that deck is studied; without, all active decks.
+  const { deckId } = useLocalSearchParams<{ deckId?: string }>();
   const [scheduler, setScheduler] = useState<Scheduler | null>(null);
+  // Schedulers with exam settings, by exam date: cards of a deck with an
+  // exam ahead are scheduled with a shorter maximum interval (see exam.ts).
+  const [examSchedulers, setExamSchedulers] = useState<Record<string, Scheduler>>({});
   const [queue, setQueue] = useState<SessionCard[] | null>(null); // null = loading
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Revealed | null>(null);
@@ -103,10 +109,22 @@ export default function ReviewScreen() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([createScheduler(), loadSessionCards(extraNew)]).then(
-      ([newScheduler, session]) => {
+    const now = new Date();
+    Promise.all([createScheduler(), loadSessionCards(extraNew, deckId)])
+      .then(async ([newScheduler, session]) => {
+        const dates = [...new Set(session.cards.map((c) => c.item.exam_date))];
+        const forExams: Record<string, Scheduler> = {};
+        for (const date of dates) {
+          const settings = examSettings(date, now);
+          if (date && settings) forExams[date] = await createScheduler(settings);
+        }
+        return [newScheduler, session, forExams] as const;
+      })
+      .then(
+      ([newScheduler, session, forExams]) => {
         if (!active) return;
         setScheduler(newScheduler);
+        setExamSchedulers(forExams);
         setQueue(session.cards);
         setMoreNewAvailable(session.moreNewAvailable);
         setShownAt(new Date().getTime());
@@ -118,7 +136,7 @@ export default function ReviewScreen() {
     return () => {
       active = false;
     };
-  }, [extraNew, loadNumber]);
+  }, [extraNew, loadNumber, deckId]);
 
   function studyMore() {
     setQueue(null); // shows "Loading…" while the next words are fetched
@@ -195,10 +213,13 @@ export default function ReviewScreen() {
   if (isProduction) instruction = isKorean ? 'Type it in Korean' : 'Type the term';
   if (isListening) instruction = 'Type what you hear';
 
+  /** The scheduler for a card: its deck's exam settings when an exam is ahead. */
+  const schedulerFor = (c: SessionCard) => examSchedulers[c.item.exam_date ?? ''] ?? scheduler;
+
   function reveal() {
     if (!scheduler || !card) return;
     setRevealed({
-      intervals: previewIntervals(scheduler, card, new Date()),
+      intervals: previewIntervals(schedulerFor(card), card, new Date()),
       typed: typesAnswer
         ? { value: cleanText(answer), correct: answersMatch(answer, card.item.term) }
         : null,
@@ -208,7 +229,7 @@ export default function ReviewScreen() {
   async function rate(rating: ReviewRating) {
     if (!scheduler || !card || !queue || !revealed) return;
     const now = new Date();
-    const schedule = reviewCard(scheduler, card, rating, now);
+    const schedule = reviewCard(schedulerFor(card), card, rating, now);
 
     setSaving(true);
     setError(null);

@@ -8,12 +8,21 @@ type ButtonProps = {
   title: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary';
+  /** Colour of a primary button: green after a right answer, red after a wrong one. */
+  tone?: 'default' | 'success' | 'danger';
   disabled?: boolean;
   /** Shows a spinner instead of the title and blocks presses. */
   busy?: boolean;
 };
 
-export function Button({ title, onPress, variant = 'primary', disabled, busy }: ButtonProps) {
+export function Button({
+  title,
+  onPress,
+  variant = 'primary',
+  tone = 'default',
+  disabled,
+  busy,
+}: ButtonProps) {
   const theme = useTheme();
   const primary = variant === 'primary';
   const inactive = disabled || busy;
@@ -26,7 +35,7 @@ export function Button({ title, onPress, variant = 'primary', disabled, busy }: 
       style={({ pressed }) => [
         styles.button,
         primary
-          ? { backgroundColor: theme.tint }
+          ? { backgroundColor: tone === 'default' ? theme.tint : theme[tone] }
           : { borderWidth: 1, borderColor: theme.border },
         (inactive || pressed) && styles.dimmed,
       ]}>

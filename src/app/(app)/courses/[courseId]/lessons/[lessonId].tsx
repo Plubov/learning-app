@@ -1,35 +1,62 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { LessonQuiz } from '@/components/lesson-quiz';
+import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
+import { LessonFlow } from '@/components/session/lesson-flow';
+import { PracticeSession, type PracticeExample } from '@/components/session/practice-session';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
 import { generatePractice, prepareLesson } from '@/lib/ai';
-import { loadLessonDetail } from '@/lib/courses';
+import { loadLessonDetail, markLessonLearned, type LessonDetail } from '@/lib/courses';
+import { buildExercises, type Exercise } from '@/lib/exercises';
+import { useT } from '@/lib/i18n';
+import { buildFlow, explanationSteps, type FlowPage } from '@/lib/lesson-flow';
 import { proficiencyLevel } from '@/lib/proficiency';
 import { supabase } from '@/lib/supabase';
 
 /**
- * A lesson. The layout is a fixed template, the same for every lesson:
- *   1. goals   2. explanation   3. the items to learn   4. examples   5. quiz
- * AI only fills the slots: the explanation and items once (on "Start
- * lesson"), examples and quiz each time practice is requested, based on the
- * learner's current proficiency per item.
+ * What the screen shows. The lesson page is a short overview; learning and
+ * practising each open as a full-screen session, one page at a time. A
+ * session's pages are built once when it opens (they are shuffled), so a
+ * reload of the lesson in the background cannot reorder them.
+ */
+type View_ =
+  | { kind: 'overview' }
+  | { kind: 'learn'; pages: FlowPage[]; lang: string | null }
+  | {
+      kind: 'practice';
+      /** Changes with every new session, so its state starts fresh. */
+      key: number;
+      examples: PracticeExample[];
+      exercises: Exercise[];
+      lang: string | null;
+      completesLesson: boolean;
+    };
+
+type Working = 'prepare' | 'practice' | null;
+
+/**
+ * A lesson. The template is the same for every lesson:
+ *   1. goals   2. Learn: the guided run (introduction steps, new items,
+ *   quick checks)   3. Practice: examples and exercises for the learner's
+ *   level   4. the words of the lesson with their proficiency.
+ * AI only fills the slots: the introduction and items once (on "Start
+ * lesson"), examples and questions each time new practice is requested.
  */
 export default function LessonScreen() {
   const { courseId, lessonId } = useLocalSearchParams<{ courseId: string; lessonId: string }>();
   const theme = useTheme();
+  const { t } = useT();
   const [reload, setReload] = useState(0);
-  const [working, setWorking] = useState<'prepare' | 'practice' | null>(null);
+  const [working, setWorking] = useState<Working>(null);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [quiz, setQuiz] = useState<'idle' | 'running'>('idle');
-  const [score, setScore] = useState<{ correct: number; total: number } | null>(null);
+  const [view, setView] = useState<View_>({ kind: 'overview' });
 
   const load = useCallback(
     () =>
@@ -43,11 +70,38 @@ export default function LessonScreen() {
   );
   const { data: lesson, error, loading } = useFocusQuery(load);
 
+  function openLearn(from: LessonDetail) {
+    if (!from.explanation) return;
+    setView({
+      kind: 'learn',
+      pages: buildFlow(from.explanation, from.items),
+      lang: explanationSteps(from.explanation).lang,
+    });
+  }
+
+  function openPractice(from: LessonDetail) {
+    if (!from.practice) return;
+    const exercises = buildExercises(from.practice.questions, from.items, from.targetLang);
+    if (exercises.length === 0) return;
+    setView({
+      kind: 'practice',
+      key: new Date().getTime(),
+      examples: from.practice.examples,
+      exercises,
+      lang: from.explanation ? explanationSteps(from.explanation).lang : null,
+      completesLesson: !from.completed,
+    });
+  }
+
+  /** Runs an AI task, then opens the session it was for with the fresh lesson. */
   async function runAi(kind: 'prepare' | 'practice', call: () => Promise<void>) {
     setWorking(kind);
     setAiError(null);
     try {
       await call();
+      const fresh = await loadLessonDetail(lessonId);
+      if (kind === 'prepare') openLearn(fresh);
+      else openPractice(fresh);
       setReload((n) => n + 1);
     } catch (reason) {
       setAiError(reason instanceof Error ? reason.message : String(reason));
@@ -55,18 +109,13 @@ export default function LessonScreen() {
     setWorking(null);
   }
 
-  function newPractice() {
-    if (!lesson) return;
-    const proficiency = Object.fromEntries(lesson.items.map((item) => [item.id, item.proficiency]));
-    setScore(null);
-    setQuiz('idle');
-    runAi('practice', () => generatePractice(lesson.id, proficiency));
+  function newPractice(from: LessonDetail) {
+    const proficiency = Object.fromEntries(from.items.map((item) => [item.id, item.proficiency]));
+    runAi('practice', () => generatePractice(from.id, proficiency));
   }
 
-  async function finishQuiz(correct: number, total: number) {
-    setScore({ correct, total });
-    setQuiz('idle');
-    // The first finished quiz completes the lesson; later ones leave the date.
+  async function practiceFinished() {
+    // The first finished practice completes the lesson; later ones leave the date.
     const { error: saveError } = await supabase
       .from('lessons')
       .update({ completed_at: new Date().toISOString() })
@@ -76,163 +125,229 @@ export default function LessonScreen() {
     setReload((n) => n + 1); // fresh proficiency
   }
 
+  function closeSession() {
+    setView({ kind: 'overview' });
+    setReload((n) => n + 1);
+  }
+
   if (!lesson) {
     return (
       <Screen>
         <Stack.Screen options={{ title: '' }} />
         {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
-        {loading && <ThemedText themeColor="textSecondary">Loading…</ThemedText>}
+        {loading && <ThemedText themeColor="textSecondary">{t('common.loading')}</ThemedText>}
       </Screen>
     );
   }
 
-  const practice = lesson.practice;
+  if (view.kind === 'learn') {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <LessonFlow
+          pages={view.pages}
+          lang={view.lang}
+          targetLang={lesson.targetLang}
+          calm={lesson.study}
+          onClose={closeSession}
+          onDone={(practise) => {
+            // Reaching the end is what counts as learned; closing early does not.
+            markLessonLearned(lesson.id).then(
+              () => setReload((n) => n + 1),
+              (reason: unknown) => setAiError(reason instanceof Error ? reason.message : String(reason)),
+            );
+            closeSession();
+            if (!practise) return;
+            if (lesson.practice) openPractice(lesson);
+            else newPractice(lesson);
+          }}
+        />
+      </>
+    );
+  }
+
+  if (view.kind === 'practice') {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <PracticeSession
+          key={view.key}
+          lessonId={lesson.id}
+          examples={view.examples}
+          exercises={view.exercises}
+          lang={view.lang}
+          targetLang={lesson.targetLang}
+          calm={lesson.study}
+          completesLesson={view.completesLesson}
+          onFinished={practiceFinished}
+          onAgain={() => newPractice(lesson)}
+          againBusy={working === 'practice'}
+          againError={aiError}
+          onClose={closeSession}
+        />
+      </>
+    );
+  }
+
+  const stepCount = lesson.explanation ? explanationSteps(lesson.explanation).steps.length : 0;
   return (
     <Screen>
-      <Stack.Screen options={{ title: lesson.title }} />
+      <Stack.Screen options={{ title: lesson.title, headerShown: true }} />
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
       <ThemedText>{lesson.summary}</ThemedText>
-      <View style={styles.section}>
-        <ThemedText type="smallBold">After this lesson you can</ThemedText>
+      <ThemedView type="backgroundElement" style={styles.box}>
+        <ThemedText type="smallBold">{t('lesson.objectives')}</ThemedText>
         {lesson.objectives.map((objective) => (
           <ThemedText key={objective}>• {objective}</ThemedText>
         ))}
-      </View>
+      </ThemedView>
+
+      {aiError && <ThemedText style={{ color: theme.danger }}>{aiError}</ThemedText>}
 
       {!lesson.started && (
         <>
           {working === 'prepare' && (
             <ThemedText type="small" themeColor="textSecondary">
-              Preparing the lesson. This happens once and takes a few seconds.
+              {t('lesson.preparing')}
             </ThemedText>
           )}
-          {aiError && <ThemedText style={{ color: theme.danger }}>{aiError}</ThemedText>}
           <Button
-            title="Start lesson"
+            title={t('step.start')}
             onPress={() => runAi('prepare', () => prepareLesson(lesson.id))}
             busy={working === 'prepare'}
           />
         </>
       )}
 
-      {lesson.explanation && (
+      {lesson.started && (
         <>
+          <ActionCard
+            icon={lesson.learned ? '✅' : '📖'}
+            title={lesson.learned ? t('lesson.learnAgain') : t('lesson.learn')}
+            subtitle={`${lesson.learned ? t('lesson.doneMark') : ''}${t('lesson.learnSub', {
+              steps: stepCount,
+              items: lesson.items.length,
+            })}`}
+            highlighted={!lesson.learned && !lesson.completed}
+            onPress={() => openLearn(lesson)}
+            disabled={working !== null}
+          />
+          <ActionCard
+            icon={lesson.completed ? '✅' : '💪'}
+            title={lesson.completed ? t('lesson.practiseAgain') : t('lesson.practise')}
+            subtitle={
+              working === 'practice'
+                ? t('lesson.writing')
+                : lesson.completed
+                  ? t('lesson.practiseSubDone')
+                  : t('lesson.practiseSub')
+            }
+            highlighted={lesson.learned && !lesson.completed}
+            busy={working === 'practice'}
+            disabled={working !== null}
+            // A finished lesson gets fresh exercises; an open one continues
+            // with the exercises already written for it.
+            onPress={() =>
+              lesson.practice && !lesson.completed ? openPractice(lesson) : newPractice(lesson)
+            }
+          />
+
           <View style={styles.section}>
-            {lesson.explanation.intro.split(/\n+/).map((paragraph, i) => (
-              <ThemedText key={i}>{paragraph}</ThemedText>
-            ))}
-          </View>
-          <View style={styles.section}>
-            <ThemedText type="smallBold">Key points</ThemedText>
-            {lesson.explanation.key_points.map((point) => (
-              <ThemedText key={point}>• {point}</ThemedText>
-            ))}
-          </View>
-        </>
-      )}
-
-      {lesson.started && (
-        <View style={styles.section}>
-          <ThemedText type="smallBold">To remember</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            These are now in your daily reviews as cards.
-          </ThemedText>
-          {lesson.items.map((item) => (
-            <ThemedView key={item.id} type="backgroundElement" style={styles.box}>
-              <View style={styles.spread}>
-                <ThemedText type="smallBold" style={styles.grow}>
-                  {item.term}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {proficiencyLevel(item.proficiency)}
-                </ThemedText>
-              </View>
-              <ThemedText>{item.meaning}</ThemedText>
-              {item.notes && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {item.notes}
-                </ThemedText>
-              )}
-            </ThemedView>
-          ))}
-        </View>
-      )}
-
-      {lesson.started && (
-        <View style={styles.section}>
-          <ThemedText type="smallBold">Practice</ThemedText>
-
-          {practice && quiz === 'idle' && practice.examples.length > 0 && (
-            <>
-              {practice.examples.map((example) => (
-                <ThemedView key={example.text} type="backgroundElement" style={styles.box}>
-                  <ThemedText>{example.text}</ThemedText>
-                  {example.explanation !== '' && (
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {example.explanation}
-                    </ThemedText>
-                  )}
-                </ThemedView>
-              ))}
-            </>
-          )}
-
-          {practice && quiz === 'running' && (
-            <LessonQuiz
-              lessonId={lesson.id}
-              questions={practice.questions}
-              targetLang={lesson.targetLang}
-              onFinished={finishQuiz}
-            />
-          )}
-
-          {score && (
-            <ThemedText type="smallBold">
-              {score.correct} of {score.total} correct.
-              {lesson.completed ? ' Lesson done ✓' : ''}
-            </ThemedText>
-          )}
-          {working === 'practice' && (
+            <ThemedText type="smallBold">{t('lesson.inThis')}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Writing examples and questions for your current level…
+              {t('lesson.inReviews')}
             </ThemedText>
-          )}
-          {aiError && <ThemedText style={{ color: theme.danger }}>{aiError}</ThemedText>}
+            {lesson.items.map((item) => (
+              <ThemedView key={item.id} type="backgroundElement" style={styles.item}>
+                <View style={styles.spread}>
+                  <ThemedText style={styles.itemTerm}>{item.term}</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {t(`level.${proficiencyLevel(item.proficiency)}`)}
+                  </ThemedText>
+                </View>
+                <ThemedText themeColor="textSecondary">{item.meaning}</ThemedText>
+                <ProgressBar value={item.proficiency} />
+              </ThemedView>
+            ))}
+          </View>
 
-          {quiz === 'idle' && (
-            <>
-              {practice && !score && (
-                <Button
-                  title={`Start quiz (${practice.questions.length} questions)`}
-                  onPress={() => setQuiz('running')}
-                  disabled={working !== null}
-                />
-              )}
-              <Button
-                title={practice ? 'New practice for my level' : 'Create practice'}
-                variant={practice && !score ? 'secondary' : 'primary'}
-                onPress={newPractice}
-                busy={working === 'practice'}
-              />
-              {score && (
-                <Button
-                  title="Back to the course"
-                  variant="secondary"
-                  onPress={() => router.dismissTo(`/courses/${courseId}`)}
-                />
-              )}
-            </>
-          )}
-        </View>
+          <Button
+            title={t('lesson.backToCourse')}
+            variant="secondary"
+            onPress={() => router.dismissTo(`/courses/${courseId}`)}
+          />
+        </>
       )}
     </Screen>
   );
 }
 
+/** A large tappable card that opens a session. */
+function ActionCard({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  highlighted,
+  busy,
+  disabled,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  highlighted?: boolean;
+  busy?: boolean;
+  disabled?: boolean;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.action,
+        { backgroundColor: theme.backgroundElement, borderColor: highlighted ? theme.tint : theme.border },
+        (pressed || (disabled && !busy)) && styles.dimmed,
+      ]}>
+      <ThemedText style={styles.actionIcon}>{icon}</ThemedText>
+      <View style={styles.grow}>
+        <ThemedText style={styles.actionTitle}>{title}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {subtitle}
+        </ThemedText>
+      </View>
+      {busy ? (
+        <ActivityIndicator color={theme.tint} />
+      ) : (
+        <ThemedText style={styles.chevron} themeColor="textSecondary">
+          ›
+        </ThemedText>
+      )}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   section: { gap: Spacing.two },
-  box: { padding: Spacing.three, borderRadius: Spacing.two, gap: Spacing.one },
+  box: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.one },
+  item: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.two },
+  itemTerm: { flex: 1, fontSize: 18, lineHeight: 26, fontWeight: 700 },
   spread: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.two },
   grow: { flex: 1 },
+  action: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+  },
+  actionIcon: { fontSize: 32, lineHeight: 40 },
+  actionTitle: { fontSize: 18, lineHeight: 26, fontWeight: 700 },
+  chevron: { fontSize: 28, lineHeight: 32 },
+  dimmed: { opacity: 0.6 },
 });

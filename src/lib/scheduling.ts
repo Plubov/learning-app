@@ -52,8 +52,13 @@ type ScheduleStatus = FsrsCard['scheduleStatus'];
  * model). Fuzzing (random spread of long intervals) is off so results are
  * predictable; it can be switched on later without changing stored data.
  */
-export function createScheduler(): Promise<Scheduler> {
-  return DefaultScheduler({ version: 'FSRS-7', enableFuzz: false });
+export function createScheduler(settings?: {
+  /** Longest interval in days; used before an exam (see exam.ts). */
+  maximumInterval?: number;
+  /** How sure recall should be, between 0 and 1; ts-fsrs's own default when left out. */
+  desiredRetention?: number;
+}): Promise<Scheduler> {
+  return DefaultScheduler({ version: 'FSRS-7', enableFuzz: false, ...settings });
 }
 
 function toState(value: number): CardState {
