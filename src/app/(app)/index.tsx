@@ -23,6 +23,11 @@ export default function DecksScreen() {
     [],
   );
   const { data: decks, error, loading } = useFocusQuery(load);
+  const loadCourses = useCallback(
+    () => supabase.from('courses').select('id, title, goal, planned_at').order('created_at'),
+    [],
+  );
+  const { data: courses } = useFocusQuery(loadCourses);
 
   // Cards in today's session (due reviews plus new words within the daily
   // limit), loaded exactly like the review screen does.
@@ -89,6 +94,36 @@ export default function DecksScreen() {
         disabled={dueCount === 0 && !today?.moreNewAvailable}
       />
       <Button title="Statistics" variant="secondary" onPress={() => router.push('/stats')} />
+
+      <ThemedText type="smallBold" style={styles.heading}>
+        Courses
+      </ThemedText>
+      {courses?.length === 0 && (
+        <ThemedText themeColor="textSecondary">
+          No courses yet. Describe a goal and get a plan with lessons.
+        </ThemedText>
+      )}
+      {courses?.map((course) => (
+        <Link key={course.id} href={`/courses/${course.id}`} asChild>
+          <Pressable>
+            <ThemedView type="backgroundElement" style={styles.row}>
+              <ThemedText type="smallBold" style={styles.grow} numberOfLines={2}>
+                {course.title ?? course.goal}
+              </ThemedText>
+              {course.planned_at === null && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  No plan yet
+                </ThemedText>
+              )}
+            </ThemedView>
+          </Pressable>
+        </Link>
+      ))}
+      <Button title="New course" onPress={() => router.push('/courses/new')} />
+
+      <ThemedText type="smallBold" style={styles.heading}>
+        Decks
+      </ThemedText>
       {!loading && decks?.length === 0 && (
         <ThemedText themeColor="textSecondary">
           No decks yet. Create one to start adding words.
@@ -125,9 +160,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.two,
     padding: Spacing.three,
     borderRadius: Spacing.two,
   },
+  heading: { marginTop: Spacing.three },
+  grow: { flex: 1 },
   account: { marginTop: Spacing.five, textAlign: 'center' },
   goal: { padding: Spacing.three, borderRadius: Spacing.two, gap: Spacing.two },
   goalRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
