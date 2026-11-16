@@ -15,7 +15,8 @@ Conventions for every table:
   input (`term is nfc normalized`)
 
 Exceptions: `profiles` uses `user_id` as primary key (one row per user);
-`review_events` has no `updated_at` (rows never change).
+`review_events` and `course_messages` have no `updated_at` (rows never
+change); `ai_usage` can only be read by its owner (the server writes it).
 
 ## Content
 
@@ -25,7 +26,7 @@ A collection the user studies, e.g. "Korean".
 | column | type | note |
 |---|---|---|
 | name | text | |
-| subject | text | 'language' now; 'science' later |
+| subject | text | 'language', 'science' or 'general' (set by a course's plan) |
 | target_lang | text | e.g. 'ko'; null for non-language decks |
 | new_per_day | int | cap on new items per day |
 
@@ -54,6 +55,7 @@ The unit of knowledge.
 | source_id | uuid null | where it came from |
 | introduced_at | timestamptz null | null = not yet shown to the learner |
 | new_position | int null | place in the deck's queue of new words (lower = sooner); null for words added by hand, which come first |
+| lesson_id | uuid null | the lesson that introduced the item; deleting the lesson keeps the item |
 
 Unique on (deck_id, kind, term) to prevent duplicates on import.
 
@@ -124,18 +126,73 @@ yet introduced their new position (meanings are never changed). Importing a
 file again therefore re-orders the words not yet learned. Returns
 `{"added": n, "requeued": m}`. The items trigger creates the cards.
 
+## Courses
+
+### courses
+A goal turned into a plan. See "Courses" in SPEC.md.
+
+| column | type | note |
+|---|---|---|
+| goal | text | what the learner typed (max 2000 characters) |
+| level | text null | what they already know |
+| weeks | int null | wanted duration; null = the planner decides |
+| minutes_per_day | int | default 20 |
+| source_id | uuid null | pasted material (`sources`, kind 'paste') |
+| deck_id | uuid null | the deck holding the course's items; created with the first plan |
+| title, summary | text null | from the plan |
+| roadmap | jsonb null | stages: `[{"title", "outcome"}]` |
+| planned_at | timestamptz null | null = no plan yet |
+| plan_model | text null | model that wrote the current plan |
+
+### lessons
+
+| column | type | note |
+|---|---|---|
+| course_id | uuid | |
+| position | int | order within the course |
+| stage | int | index into `courses.roadmap` |
+| week | int | timeline: week of the course, from 1 |
+| title, summary | text | |
+| objectives | jsonb | list of strings |
+| explanation | jsonb null | `{"intro", "key_points": [...]}`; written once |
+| prepared_at | timestamptz null | null = not started, no items yet |
+| practice | jsonb null | latest practice: `{"examples": [{"text", "explanation"}], "questions": [{"item_id", "kind": "choice" or "typed", "prompt", "options", "answer", "explanation"}]}` |
+| practice_at | timestamptz null | |
+| completed_at | timestamptz null | first finished quiz |
+
+The jsonb shapes and their validators are defined once, in
+`supabase/functions/_shared/course-schemas.ts`, used by the Edge Function
+(to validate model output) and by the app (as types).
+
+AI-written content is stored only through these database functions, called
+by the Edge Function after validation:
+- `save_course_plan(course, plan, model)`: creates the deck on the first
+  plan, fills in the course, deletes the lessons not yet started and appends
+  the new ones after the kept ones.
+- `save_lesson_content(lesson, explanation, items)`: stores the explanation
+  and creates the items (their cards come from the items trigger). Does
+  nothing if the lesson is already prepared. A term the deck already has is
+  skipped.
+
+### course_messages
+The tutor chat per course: `course_id`, `role` ('user', 'assistant'),
+`content`, `plan_change` null (on a tutor message that proposes a change: the
+instruction given to the planner when the learner agrees). Read, insert and
+delete only.
+
 ## Learning record
 
 ### review_events (append-only)
 
 | column | type | note |
 |---|---|---|
-| card_id | uuid | set for card reviews (not null until exercises exist) |
+| card_id | uuid null | set for card reviews |
+| lesson_id | uuid null | set for quiz answers of a lesson; exactly one of card_id and lesson_id is set |
 | exercise_id | uuid null | set for exercises; column added in M4 |
 | item_id | uuid | one row per item involved |
 | rating | smallint | 1 again, 2 hard, 3 good, 4 easy |
 | correct | boolean null | null when the answer was not checked automatically |
-| response | jsonb null | `{"type":"text","value":"..."}` now; later `{"type":"drawing","drawing_id":"..."}` |
+| response | jsonb null | `{"type":"text","value":"..."}` or `{"type":"choice","value":"..."}` now; later `{"type":"drawing","drawing_id":"..."}` |
 | duration_ms | int | |
 | reviewed_at | timestamptz | time on the device |
 | device_id | text | for sync debugging |
@@ -149,6 +206,11 @@ Card reviews are saved through the database function `record_review`, which
 in one transaction updates the card's schedule, appends the event, sets
 `items.introduced_at` on the first review and updates the day's row in
 `daily_activity`. The app does not write these separately.
+
+Quiz answers are saved through `record_quiz_answer` (lesson, item, correct,
+response, time): one event with rating 3 (correct) or 1 (wrong) and no card.
+They count towards proficiency but do not move a card's schedule, and they
+are not counted as reviews by the statistics or the daily goal.
 
 The statistics screen reads its numbers from the database function
 `review_stats` (time zone, card types, number of days). It only reads and
@@ -216,9 +278,13 @@ not met yet.
 | accepts_images | boolean | needed for grading handwritten work |
 
 ### ai_usage
-One row per AI call: `connection_id`, `task` ('generate_items',
-'generate_exercises', 'grade_answer'), `model`, `input_tokens`,
-`output_tokens`, `cost_estimate`, `ok`. No prompt or response text.
+One row per AI call: `connection_id` (null while the server's own key is
+used), `task` ('plan_course', 'prepare_lesson', 'generate_practice', 'chat';
+later 'generate_items', 'grade_answer'), `model`, `input_tokens`,
+`output_tokens`, `cost_estimate` (US dollars, null if the price is unknown),
+`ok`. No prompt or response text. A call whose answer failed validation is
+logged with `ok` false. Written only by the Edge Function with the service
+role; the owner can read it. It also backs the daily limit per user.
 
 ## Profile
 

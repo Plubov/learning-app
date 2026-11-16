@@ -48,12 +48,28 @@ Project:
 
 ## M3 AI generation
 
-- [ ] Edge Function with the internal AI interface and one provider adapter
-- [ ] ai_connections and ai_usage; own API key entered in settings
+- [x] Edge Function with the internal AI interface and one provider adapter
+- [x] ai_usage (server key as a secret for now)
+- [ ] ai_connections; own API key and model entered in settings
 - [ ] Paste a word list or text, review proposed items, confirm to save
-- [ ] Output validation against a schema
+- [x] Output validation against a schema
 - [ ] AI-assigned level per word (e.g. TOPIK 1–6), used to introduce common
       words first (learning order rule "frequency")
+
+## Courses (lessons beyond flashcards)
+
+- [x] Course from a goal and pasted material; plan with roadmap, timeline
+      and lessons, generated once
+- [x] Lesson template; explanation and items generated once per lesson
+- [x] Proficiency per item from cards and quiz answers
+- [x] Practice (examples, quiz) generated for the current proficiency
+- [x] Tutor chat; plan changes proposed in chat and applied by the learner
+- [x] Review screen handles decks that are not Korean
+- [ ] First real course tried end to end with an API key; prompts adjusted
+- [ ] Edit or delete a course; edit the goal
+- [ ] PDF upload as course material (Storage)
+- [ ] Video courses (transcript first)
+- [ ] Usage and cost overview from ai_usage
 
 ## M4 Knowledge model and exercises
 

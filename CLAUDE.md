@@ -30,9 +30,11 @@ works; do not add libraries or infrastructure without saying why.
    to `auth.uid() = user_id`. A table without policies is a bug.
 3. No AI provider key ever reaches the client. AI calls go through Edge
    Functions. User-supplied keys are stored encrypted, never logged.
-4. App code never names a specific AI provider. It calls the internal AI
-   interface (`generateItems`, `generateExercises`, `gradeAnswer`); provider
-   adapters live behind it.
+4. App code never names a specific AI provider or model. It calls the
+   internal AI interface in `src/lib/ai.ts` (`planCourse`, `prepareLesson`,
+   `generatePractice`, `askTutor`; later `generateItems`, `gradeAnswer`).
+   On the server, tasks ask for a tier ('plan' or 'light'); provider
+   adapters live behind `supabase/functions/ai/provider.ts`.
 5. AI output is validated against a schema before it is stored. Invalid output
    is rejected, never saved.
 6. Every AI call writes one row to `ai_usage`.
@@ -78,9 +80,17 @@ guidance (always read the versioned Expo docs, not memory).
   (writes `src/lib/database.types.ts`; never edit that file by hand)
 - List applied migrations: `npx supabase migration list --remote`
 - Database security checks (run after every migration):
-  `npx supabase db query --remote -f supabase/tests/rls_m1.sql` (runs in a
-  transaction that is rolled back; prints "all RLS checks passed") and
+  `npx supabase db query --remote -f supabase/tests/rls_m1.sql` and the same
+  with `supabase/tests/rls_courses.sql` (each runs in a transaction that is
+  rolled back and prints "all ... checks passed"), then
   `npx supabase db advisors --remote`
+- Edge Function (`supabase/functions/ai/`, runs on Deno, not checked by
+  `tsc`): type check with
+  `npx deno check --config supabase/functions/ai/deno.json supabase/functions/ai/index.ts`,
+  deploy with `npx supabase functions deploy ai`
+- AI secrets (server only, never in `.env`):
+  `npx supabase secrets set ANTHROPIC_API_KEY=...`; optional
+  `AI_MODEL_PLAN`, `AI_MODEL_LIGHT`, `AI_DAILY_CALLS`, `AI_DAILY_PLANS`
 - One-time setup per machine: `npx supabase login`, then
   `npx supabase link --project-ref kwyrtvjirgqzzxzdxpqu` (asks for the
   database password)

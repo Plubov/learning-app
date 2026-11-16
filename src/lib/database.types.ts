@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage: {
+        Row: {
+          connection_id: string | null
+          cost_estimate: number | null
+          created_at: string
+          id: string
+          input_tokens: number
+          model: string
+          ok: boolean
+          output_tokens: number
+          task: string
+          user_id: string
+        }
+        Insert: {
+          connection_id?: string | null
+          cost_estimate?: number | null
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model: string
+          ok: boolean
+          output_tokens?: number
+          task: string
+          user_id: string
+        }
+        Update: {
+          connection_id?: string | null
+          cost_estimate?: number | null
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model?: string
+          ok?: boolean
+          output_tokens?: number
+          task?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cards: {
         Row: {
           card_type: string
@@ -81,6 +120,113 @@ export type Database = {
             columns: ["item_id", "user_id"]
             isOneToOne: false
             referencedRelation: "items"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      course_messages: {
+        Row: {
+          content: string
+          course_id: string
+          created_at: string
+          id: string
+          plan_change: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          course_id: string
+          created_at?: string
+          id?: string
+          plan_change?: string | null
+          role: string
+          user_id?: string
+        }
+        Update: {
+          content?: string
+          course_id?: string
+          created_at?: string
+          id?: string
+          plan_change?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_messages_course_id_user_id_fkey"
+            columns: ["course_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      courses: {
+        Row: {
+          created_at: string
+          deck_id: string | null
+          goal: string
+          id: string
+          level: string | null
+          minutes_per_day: number
+          plan_model: string | null
+          planned_at: string | null
+          roadmap: Json | null
+          source_id: string | null
+          summary: string | null
+          title: string | null
+          updated_at: string
+          user_id: string
+          weeks: number | null
+        }
+        Insert: {
+          created_at?: string
+          deck_id?: string | null
+          goal: string
+          id?: string
+          level?: string | null
+          minutes_per_day?: number
+          plan_model?: string | null
+          planned_at?: string | null
+          roadmap?: Json | null
+          source_id?: string | null
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+          weeks?: number | null
+        }
+        Update: {
+          created_at?: string
+          deck_id?: string | null
+          goal?: string
+          id?: string
+          level?: string | null
+          minutes_per_day?: number
+          plan_model?: string | null
+          planned_at?: string | null
+          roadmap?: Json | null
+          source_id?: string | null
+          summary?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+          weeks?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courses_deck_id_user_id_fkey"
+            columns: ["deck_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "courses_source_id_user_id_fkey"
+            columns: ["source_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
             referencedColumns: ["id", "user_id"]
           },
         ]
@@ -167,6 +313,7 @@ export type Database = {
           id: string
           introduced_at: string | null
           kind: string
+          lesson_id: string | null
           meaning: string
           new_position: number | null
           notes: string | null
@@ -181,6 +328,7 @@ export type Database = {
           id?: string
           introduced_at?: string | null
           kind: string
+          lesson_id?: string | null
           meaning: string
           new_position?: number | null
           notes?: string | null
@@ -195,6 +343,7 @@ export type Database = {
           id?: string
           introduced_at?: string | null
           kind?: string
+          lesson_id?: string | null
           meaning?: string
           new_position?: number | null
           notes?: string | null
@@ -212,10 +361,82 @@ export type Database = {
             referencedColumns: ["id", "user_id"]
           },
           {
+            foreignKeyName: "items_lesson_fkey"
+            columns: ["lesson_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
             foreignKeyName: "items_source_fkey"
             columns: ["source_id", "user_id"]
             isOneToOne: false
             referencedRelation: "sources"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          completed_at: string | null
+          course_id: string
+          created_at: string
+          explanation: Json | null
+          id: string
+          objectives: Json
+          position: number
+          practice: Json | null
+          practice_at: string | null
+          prepared_at: string | null
+          stage: number
+          summary: string
+          title: string
+          updated_at: string
+          user_id: string
+          week: number
+        }
+        Insert: {
+          completed_at?: string | null
+          course_id: string
+          created_at?: string
+          explanation?: Json | null
+          id?: string
+          objectives?: Json
+          position: number
+          practice?: Json | null
+          practice_at?: string | null
+          prepared_at?: string | null
+          stage?: number
+          summary: string
+          title: string
+          updated_at?: string
+          user_id?: string
+          week: number
+        }
+        Update: {
+          completed_at?: string | null
+          course_id?: string
+          created_at?: string
+          explanation?: Json | null
+          id?: string
+          objectives?: Json
+          position?: number
+          practice?: Json | null
+          practice_at?: string | null
+          prepared_at?: string | null
+          stage?: number
+          summary?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_course_id_user_id_fkey"
+            columns: ["course_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
             referencedColumns: ["id", "user_id"]
           },
         ]
@@ -255,39 +476,42 @@ export type Database = {
       }
       review_events: {
         Row: {
-          card_id: string
+          card_id: string | null
           correct: boolean | null
           created_at: string
           device_id: string | null
           duration_ms: number | null
           id: string
           item_id: string
+          lesson_id: string | null
           rating: number
           response: Json | null
           reviewed_at: string
           user_id: string
         }
         Insert: {
-          card_id: string
+          card_id?: string | null
           correct?: boolean | null
           created_at?: string
           device_id?: string | null
           duration_ms?: number | null
           id?: string
           item_id: string
+          lesson_id?: string | null
           rating: number
           response?: Json | null
           reviewed_at: string
           user_id?: string
         }
         Update: {
-          card_id?: string
+          card_id?: string | null
           correct?: boolean | null
           created_at?: string
           device_id?: string | null
           duration_ms?: number | null
           id?: string
           item_id?: string
+          lesson_id?: string | null
           rating?: number
           response?: Json | null
           reviewed_at?: string
@@ -306,6 +530,13 @@ export type Database = {
             columns: ["item_id", "user_id"]
             isOneToOne: false
             referencedRelation: "items"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "review_events_lesson_fkey"
+            columns: ["lesson_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
             referencedColumns: ["id", "user_id"]
           },
         ]
@@ -357,6 +588,18 @@ export type Database = {
         }
         Returns: Json
       }
+      record_quiz_answer: {
+        Args: {
+          p_correct: boolean
+          p_device_id?: string
+          p_duration_ms?: number
+          p_item_id: string
+          p_lesson_id: string
+          p_response: Json
+          p_reviewed_at: string
+        }
+        Returns: undefined
+      }
       record_review: {
         Args: {
           p_card_id: string
@@ -374,6 +617,14 @@ export type Database = {
       review_stats: {
         Args: { p_card_types: string[]; p_days?: number; p_time_zone: string }
         Returns: Json
+      }
+      save_course_plan: {
+        Args: { p_course_id: string; p_model: string; p_plan: Json }
+        Returns: undefined
+      }
+      save_lesson_content: {
+        Args: { p_explanation: Json; p_items: Json; p_lesson_id: string }
+        Returns: undefined
       }
     }
     Enums: {
