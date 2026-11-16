@@ -79,8 +79,9 @@ export default function ReviewScreen() {
     };
   }, []);
 
-  // Korean is on screen: the front of a recognition card, or a production
-  // card after "Check". Read it aloud once each time that happens.
+  // Korean is on screen (or is the question): the front of a recognition or
+  // listening card, or a production card after "Check". Read it aloud once
+  // each time that happens.
   const current = queue?.[0];
   const koreanShown =
     current !== undefined && (current.card_type !== 'production' || revealed !== null);
@@ -169,23 +170,30 @@ export default function ReviewScreen() {
   }
 
   const isProduction = card.card_type === 'production';
+  const isListening = card.card_type === 'listening';
+  /** Production and listening cards: the answer is typed in Hangul and checked. */
+  const typesAnswer = isProduction || isListening;
 
-  const listenButton = (
+  const listenButton = (large: boolean) => (
     <Pressable
       onPress={() => speakKorean(card.item.term)}
       accessibilityRole="button"
       accessibilityLabel="Listen"
       hitSlop={Spacing.two}
       style={({ pressed }) => pressed && styles.dimmed}>
-      <ThemedText style={styles.listen}>🔊</ThemedText>
+      <ThemedText style={large ? styles.listenLarge : styles.listen}>🔊</ThemedText>
     </Pressable>
   );
+
+  let instruction = 'What does it mean?';
+  if (isProduction) instruction = 'Type it in Korean';
+  if (isListening) instruction = 'Type what you hear';
 
   function reveal() {
     if (!scheduler || !card) return;
     setRevealed({
       intervals: previewIntervals(scheduler, card, new Date()),
-      typed: isProduction
+      typed: typesAnswer
         ? { value: cleanText(answer), correct: answersMatch(answer, card.item.term) }
         : null,
     });
@@ -234,7 +242,7 @@ export default function ReviewScreen() {
       <Screen>
         <View style={styles.topRow}>
           <ThemedText type="small" themeColor="textSecondary">
-            {queue.length} left · {isProduction ? 'Type it in Korean' : 'What does it mean?'}
+            {queue.length} left · {instruction}
           </ThemedText>
           {autoplay !== null && (
             <Pressable onPress={toggleAutoplay} accessibilityRole="button" hitSlop={Spacing.two}>
@@ -246,18 +254,23 @@ export default function ReviewScreen() {
         </View>
 
         <ThemedView type="backgroundElement" style={styles.card}>
-          <ThemedText style={styles.prompt}>
-            {isProduction ? card.item.meaning : card.item.term}
-          </ThemedText>
-          {!isProduction && listenButton}
+          {isListening ? (
+            listenButton(true)
+          ) : (
+            <ThemedText style={styles.prompt}>
+              {isProduction ? card.item.meaning : card.item.term}
+            </ThemedText>
+          )}
+          {card.card_type === 'recognition' && listenButton(false)}
 
           {revealed && (
             <>
               <View style={[styles.divider, { backgroundColor: theme.border }]} />
               <ThemedText style={styles.prompt}>
-                {isProduction ? card.item.term : card.item.meaning}
+                {isProduction || isListening ? card.item.term : card.item.meaning}
               </ThemedText>
-              {isProduction && listenButton}
+              {isListening && <ThemedText style={styles.meaning}>{card.item.meaning}</ThemedText>}
+              {isProduction && listenButton(false)}
               {revealed.typed && (
                 <ThemedText
                   style={{ color: revealed.typed.correct ? theme.tint : theme.danger }}>
@@ -277,7 +290,7 @@ export default function ReviewScreen() {
 
         {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
-        {!revealed && isProduction && (
+        {!revealed && typesAnswer && (
           <KoreanTextField
             key={card.id} // a fresh, focused input for every card
             placeholder="한국어"
@@ -291,7 +304,7 @@ export default function ReviewScreen() {
           />
         )}
         {!revealed && (
-          <Button title={isProduction ? 'Check' : 'Show answer'} onPress={reveal} />
+          <Button title={typesAnswer ? 'Check' : 'Show answer'} onPress={reveal} />
         )}
 
         {revealed && (
@@ -334,6 +347,8 @@ const styles = StyleSheet.create({
   },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   listen: { fontSize: 28, lineHeight: 36 },
+  listenLarge: { fontSize: 64, lineHeight: 80 },
+  meaning: { fontSize: 20, lineHeight: 28, textAlign: 'center' },
   prompt: { fontSize: 32, lineHeight: 44, textAlign: 'center' },
   divider: { height: 1, alignSelf: 'stretch' },
   notes: { textAlign: 'center' },

@@ -42,9 +42,7 @@ Project:
 - [x] Import from a RemNote export file
 - [x] Learning order for new words: topics mixed, phrases after their words
 - [x] Korean read aloud with device text-to-speech
-- [ ] Listening cards (hear the word, then answer)
-      (migration applied and in the repo; the app code may still be
-      uncommitted on the first PC, check `git status` there)
+- [x] Listening cards (hear the word, then answer)
 - [x] Daily cap for new items, with "Learn more"
 - [x] Simple statistics screen
 

@@ -100,6 +100,9 @@ begin
   -- production and, for vocab, listening.
   select count(*) into n from public.cards where item_id = i;
   if n <> 3 then raise exception 'FAIL: expected 3 cards for new vocab item, found %', n; end if;
+  if not exists (select 1 from public.cards where item_id = i and card_type = 'listening') then
+    raise exception 'FAIL: new vocab item has no listening card';
+  end if;
   select id into c from public.cards where item_id = i and card_type = 'recognition';
 
   -- record_review updates the card, appends the event, marks the item introduced
@@ -196,6 +199,12 @@ begin
   select count(*) into n from public.cards c join public.items i on i.id = c.item_id
   where i.term = '물';
   if n <> 3 then raise exception 'FAIL: imported item has % cards, expected 3', n; end if;
+
+  -- Grammar items get no listening card.
+  insert into public.items (deck_id, kind, term, meaning)
+  values (d, 'grammar', '은/는', 'topic particle') returning id into i;
+  select count(*) into n from public.cards where item_id = i;
+  if n <> 2 then raise exception 'FAIL: grammar item has % cards, expected 2', n; end if;
   if (select new_position from public.items where term = '물' and deck_id = d)
      >= (select new_position from public.items where term = '차' and deck_id = d) then
     raise exception 'FAIL: imported items do not get positions in the given order';
@@ -230,14 +239,15 @@ begin
   end if;
 
   -- review_stats counts only B's rows: 2 reviews of 사과 today (above),
-  -- 사과 learning (its production card is still new), 물 and 차 not started.
+  -- 사과 learning (its production card is still new); 물, 차 and the grammar
+  -- item 은/는 not started.
   declare
     s jsonb := public.review_stats('Europe/Berlin', array['recognition', 'production'], 14);
   begin
     if s -> 'today' <> '{"reviews": 2, "again": 0, "duration_ms": 0, "new_items": 1}'::jsonb then
       raise exception 'FAIL: review_stats today = %', s -> 'today';
     end if;
-    if s -> 'items' <> '{"not_started": 2, "learning": 1, "known": 0}'::jsonb then
+    if s -> 'items' <> '{"not_started": 3, "learning": 1, "known": 0}'::jsonb then
       raise exception 'FAIL: review_stats items = %', s -> 'items';
     end if;
     if jsonb_array_length(s -> 'days') <> 14
