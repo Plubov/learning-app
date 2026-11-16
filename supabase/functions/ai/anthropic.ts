@@ -4,19 +4,33 @@
  * ANTHROPIC_API_KEY and never leaves the server (CLAUDE.md rule 3).
  *
  * Models can be changed without touching code:
- *   npx supabase secrets set AI_MODEL_PLAN=... AI_MODEL_LIGHT=...
+ *   npx supabase secrets set AI_MODEL_PLAN=... AI_MODEL_LIGHT=... AI_MODEL_READ=...
  */
 import Anthropic from '@anthropic-ai/sdk';
 
-import { AiError, type AiProvider, type AiRequest, type AiResult, type Tier } from './provider.ts';
+import {
+  AiError,
+  type AiAttachment,
+  type AiProvider,
+  type AiRequest,
+  type AiResult,
+  type Tier,
+} from './provider.ts';
 
 const DEFAULT_MODELS: Record<Tier, string> = {
   plan: 'claude-opus-5-5',
   light: 'claude-haiku-5-5',
+  read: 'claude-sonnet-5-5',
+};
+
+const MODEL_SECRETS: Record<Tier, string> = {
+  plan: 'AI_MODEL_PLAN',
+  light: 'AI_MODEL_LIGHT',
+  read: 'AI_MODEL_READ',
 };
 
 /** How hard the model thinks: more for the one-time plan, little for daily content. */
-const EFFORT: Record<Tier, 'low' | 'medium'> = { plan: 'medium', light: 'low' };
+const EFFORT: Record<Tier, 'low' | 'medium'> = { plan: 'medium', light: 'low', read: 'low' };
 
 /** US dollars per million tokens: [input, output]. Used for the estimate in ai_usage only. */
 const PRICES: Record<string, [number, number]> = {
@@ -25,12 +39,17 @@ const PRICES: Record<string, [number, number]> = {
   'claude-haiku-5-5': [0.1, 0.5],
 };
 
-/** Edge Functions must answer within 150 seconds; stop a little before that. */
-const TIMEOUT_MS = 140_000;
+/**
+ * Edge Functions must answer within 150 seconds; stop a little before that.
+ * For the same reason a failed call is not tried again here: a second try
+ * after a slow first one would run past the limit, and the function would be
+ * cut off without an answer or a usage row. The app offers "try again".
+ */
+const TIMEOUT_MS = 135_000;
 
 export class AnthropicProvider implements AiProvider {
   modelFor(tier: Tier): string {
-    const override = Deno.env.get(tier === 'plan' ? 'AI_MODEL_PLAN' : 'AI_MODEL_LIGHT');
+    const override = Deno.env.get(MODEL_SECRETS[tier]);
     return override || DEFAULT_MODELS[tier];
   }
 
@@ -39,7 +58,7 @@ export class AnthropicProvider implements AiProvider {
     if (!apiKey) {
       throw new AiError('AI is not set up yet: the server has no API key.', 503);
     }
-    const client = new Anthropic({ apiKey, timeout: TIMEOUT_MS, maxRetries: 1 });
+    const client = new Anthropic({ apiKey, timeout: TIMEOUT_MS, maxRetries: 0 });
     const model = this.modelFor(request.tier);
 
     let message: Anthropic.Message;
@@ -51,7 +70,7 @@ export class AnthropicProvider implements AiProvider {
           model,
           max_tokens: request.maxTokens,
           system: request.system,
-          messages: request.messages,
+          messages: withAttachments(request),
           output_config: {
             effort: EFFORT[request.tier],
             format: { type: 'json_schema', schema: request.schema },
@@ -94,6 +113,38 @@ export class AnthropicProvider implements AiProvider {
   }
 }
 
+type ImageType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+const IMAGE_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+function fileBlock(file: AiAttachment): Anthropic.ContentBlockParam {
+  if (file.mediaType === 'application/pdf') {
+    return {
+      type: 'document',
+      source: { type: 'base64', media_type: 'application/pdf', data: file.base64 },
+    };
+  }
+  if (IMAGE_TYPES.includes(file.mediaType)) {
+    return {
+      type: 'image',
+      source: { type: 'base64', media_type: file.mediaType as ImageType, data: file.base64 },
+    };
+  }
+  throw new AiError('This kind of file cannot be read. Use a photo (JPEG, PNG) or a PDF.', 400);
+}
+
+/** The messages in this provider's form; attachments go in front of the first message's text. */
+function withAttachments(request: AiRequest): Anthropic.MessageParam[] {
+  const files = request.attachments ?? [];
+  return request.messages.map((message, i) =>
+    i === 0 && files.length > 0
+      ? {
+          role: message.role,
+          content: [...files.map(fileBlock), { type: 'text' as const, text: message.content }],
+        }
+      : message,
+  );
+}
+
 function toAiError(error: unknown): AiError {
   if (error instanceof Anthropic.AuthenticationError) {
     return new AiError('The server\'s AI key was rejected. Check the ANTHROPIC_API_KEY secret.', 503);
@@ -103,6 +154,11 @@ function toAiError(error: unknown): AiError {
   }
   if (error instanceof Anthropic.NotFoundError) {
     return new AiError('The configured AI model does not exist.', 503);
+  }
+  if (error instanceof Anthropic.BadRequestError) {
+    // With files this is nearly always the file itself: too large, too many
+    // pages, damaged or password-protected.
+    return new AiError('The AI service could not accept this request. If it has a file, try a smaller or clearer one.', 400);
   }
   if (error instanceof Anthropic.RateLimitError) {
     return new AiError('The AI service is busy or out of credit. Try again in a minute.', 429);

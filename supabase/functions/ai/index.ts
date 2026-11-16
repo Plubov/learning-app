@@ -11,6 +11,11 @@
  *   prepare_lesson     once per lesson: explanation and items
  *   generate_practice  on demand: examples and a quiz for the learner's level
  *   chat               one message to the tutor
+ *   read_material      reads the next unread part of an uploaded file (photo,
+ *                      scan, a few PDF pages) into text; called until all
+ *                      parts are read
+ *   check_homework     a handwritten solution is read and checked, or a hint
+ *                      is given
  *
  * Rules kept here (CLAUDE.md): the provider key stays on the server, output
  * is validated before it is stored, every call writes one ai_usage row, and
@@ -19,28 +24,51 @@
 import { withSupabase, type SupabaseContext } from '@supabase/server';
 
 import {
+  APP_LANGUAGES,
   COURSE_PLAN_SCHEMA,
+  HOMEWORK_CHECK_SCHEMA,
   LESSON_CONTENT_SCHEMA,
   LIMITS,
+  MATERIAL_READING_SCHEMA,
   PRACTICE_SCHEMA,
+  SECTION_CHOICE_SCHEMA,
   SUBJECTS,
   TUTOR_REPLY_SCHEMA,
   validateCoursePlan,
+  validateHomeworkCheck,
   validateLessonContent,
+  validateMaterialReading,
   validatePractice,
   validateTutorReply,
+  type AppLanguage,
+  type HomeworkMode,
+  type HomeworkResult,
   type StoredPractice,
   type Subject,
   type Validated,
 } from '../_shared/course-schemas.ts';
-import { AiError, getProvider, type AiMessage, type AiRequest } from './provider.ts';
+import { cleanChoice, sectionPreview, splitSections } from '../_shared/material-sections.ts';
 import {
+  AiError,
+  getProvider,
+  type AiAttachment,
+  type AiMessage,
+  type AiRequest,
+} from './provider.ts';
+import {
+  homeworkSystem,
+  homeworkUser,
+  inLanguage,
   lessonSystem,
   lessonUser,
   PLAN_SYSTEM,
   planUser,
   PRACTICE_SYSTEM,
   practiceUser,
+  READ_SYSTEM,
+  readUser,
+  SELECT_SYSTEM,
+  selectUser,
   tutorSystem,
   type LessonOutline,
 } from './prompts.ts';
@@ -56,6 +84,11 @@ const CHAT_HISTORY = 20;
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status });
+}
+
+/** The language the learner chose for the app, sent with every request; null from older app versions. */
+function langOf(body: Body): AppLanguage | null {
+  return APP_LANGUAGES.find((code) => code === body.lang) ?? null;
 }
 
 function uuid(value: unknown, name: string): string {
@@ -165,10 +198,15 @@ type LessonRow = {
   objectives: string[];
   prepared_at: string | null;
   completed_at: string | null;
+  material_refs: MaterialRef[] | null;
+  material_at: string | null;
 };
 
+/** A section of a source's text: see ../_shared/material-sections.ts. */
+type MaterialRef = { source: string; index: number };
+
 const LESSON_COLUMNS =
-  'id, course_id, position, week, stage, title, summary, objectives, prepared_at, completed_at';
+  'id, course_id, position, week, stage, title, summary, objectives, prepared_at, completed_at, material_refs, material_at';
 
 async function loadOutline(ctx: Context, courseId: string): Promise<LessonRow[]> {
   return must(
@@ -195,6 +233,7 @@ function outlineOf(lessons: LessonRow[]): LessonOutline[] {
 
 type CourseRow = {
   id: string;
+  kind: string;
   goal: string;
   level: string | null;
   weeks: number | null;
@@ -204,6 +243,7 @@ type CourseRow = {
   title: string | null;
   summary: string | null;
   roadmap: { title: string }[] | null;
+  scheduled: boolean;
   planned_at: string | null;
 };
 
@@ -211,11 +251,130 @@ async function loadCourse(ctx: Context, courseId: string): Promise<CourseRow> {
   return must(
     await ctx.supabase
       .from('courses')
-      .select('id, goal, level, weeks, minutes_per_day, source_id, deck_id, title, summary, roadmap, planned_at')
+      .select('id, kind, goal, level, weeks, minutes_per_day, source_id, deck_id, title, summary, roadmap, scheduled, planned_at')
       .eq('id', courseId)
       .maybeSingle(),
     'Course',
   ) as CourseRow;
+}
+
+type ReadSource = { id: string; title: string; role: string | null; text: string; read_at: string | null };
+
+/**
+ * Everything the learner gave the course as material, as texts: the text
+ * pasted when the course was made, and every added file or text that has
+ * been read to the end (half a chapter would look complete).
+ */
+async function readSources(ctx: Context, course: CourseRow): Promise<ReadSource[]> {
+  const sources: ReadSource[] = [];
+  if (course.source_id) {
+    const pasted = must(
+      await ctx.supabase.from('sources').select('id, text').eq('id', course.source_id).maybeSingle(),
+      'Course material',
+    ) as { id: string; text: string | null };
+    if (pasted.text) {
+      sources.push({ id: pasted.id, title: 'Pasted with the course', role: null, text: pasted.text, read_at: null });
+    }
+  }
+  const files = must(
+    await ctx.supabase
+      .from('sources')
+      .select('id, title, role, text, read_at')
+      .eq('course_id', course.id)
+      .not('read_at', 'is', null)
+      .not('text', 'is', null)
+      .order('created_at'),
+    'Course files',
+  ) as ReadSource[];
+  return [...sources, ...files];
+}
+
+/** The whole material as one text, for the plan. Null when there is none. */
+async function courseMaterial(ctx: Context, course: CourseRow): Promise<string | null> {
+  const sources = await readSources(ctx, course);
+  if (sources.length === 0) return null;
+  const material = sources
+    .map((file) => `# ${file.title}${file.role ? ` (${file.role})` : ''}\n\n${file.text}`)
+    .join('\n\n---\n\n');
+  // Never cut material silently: a plan from half a syllabus would look complete.
+  if (material.length > LIMITS.courseMaterial) {
+    throw new AiError(
+      `The course material is ${material.length} characters long; at most ${LIMITS.courseMaterial} fit. Remove a file from the course.`,
+      400,
+    );
+  }
+  return material;
+}
+
+/**
+ * The material one lesson of a study course is written from: only the
+ * sections that belong to it. A small AI call chooses them from a list of
+ * all sections (heading and first words of each); the choice is stored on
+ * the lesson, so its practice uses the same sections without asking again.
+ * The choice is made anew when material was read after it.
+ */
+async function lessonMaterial(
+  ctx: Context,
+  course: CourseRow,
+  lesson: LessonRow,
+  lang: AppLanguage | null,
+): Promise<string | null> {
+  if (course.kind !== 'study') return null;
+  const sources = await readSources(ctx, course);
+  if (sources.length === 0) return null;
+  const all = sources.flatMap((source) =>
+    splitSections(source.text).map((section, index) => ({ source, index, section })),
+  );
+  const render = (entries: typeof all) =>
+    entries
+      .map(({ source, section }) => `# ${source.title}: ${section.heading}\n\n${section.text}`)
+      .join('\n\n---\n\n');
+
+  // A small course fits whole; choosing would only risk leaving something out.
+  const total = all.reduce((sum, entry) => sum + entry.section.text.length, 0);
+  if (total <= LIMITS.lessonMaterial) return render(all);
+
+  const latest = sources.reduce((max, s) => Math.max(max, s.read_at ? Date.parse(s.read_at) : 0), 0);
+  let refs = lesson.material_refs;
+  if (!refs || !lesson.material_at || Date.parse(lesson.material_at) < latest) {
+    const outline = outlineOf(await loadOutline(ctx, course.id));
+    const { value: chosen } = await runAi(
+      ctx,
+      'select_material',
+      {
+        tier: 'light',
+        system: SELECT_SYSTEM,
+        messages: [
+          {
+            role: 'user',
+            content: selectUser({
+              courseTitle: course.title ?? '',
+              outline,
+              lesson,
+              sections: all.map(
+                ({ source, section }) =>
+                  `[${source.title}${source.role ? `, ${source.role}` : ''}] ${section.heading}: ${sectionPreview(section)}`,
+              ),
+            }),
+          },
+        ],
+        schema: SECTION_CHOICE_SCHEMA,
+        maxTokens: 2000,
+      },
+      (value) => ({ ok: true, value: cleanChoice(value, all.length, LIMITS.lessonSections) }),
+    );
+    refs = chosen.map((n) => ({ source: all[n].source.id, index: all[n].index }));
+    const saved = await ctx.supabase
+      .from('lessons')
+      .update({ material_refs: refs, material_at: new Date().toISOString() })
+      .eq('id', lesson.id);
+    if (saved.error) throw new AiError(`Database error (material): ${saved.error.message}`, 500);
+  }
+
+  const picked = refs
+    .map((ref) => all.find((entry) => entry.source.id === ref.source && entry.index === ref.index))
+    .filter((entry) => entry !== undefined);
+  return picked.length > 0 ? render(picked) : null;
 }
 
 async function planCourse(ctx: Context, body: Body): Promise<void> {
@@ -223,18 +382,7 @@ async function planCourse(ctx: Context, body: Body): Promise<void> {
   if ((await usageSince(ctx, 'plan_course')) >= DAILY_PLANS) {
     throw new AiError('The daily limit for course plans is reached. Try again tomorrow.', 429);
   }
-  let material: string | null = null;
-  if (course.source_id) {
-    const source = must(
-      await ctx.supabase.from('sources').select('text').eq('id', course.source_id).maybeSingle(),
-      'Course material',
-    ) as { text: string | null };
-    material = source.text;
-    // Never cut material silently: a plan from half a syllabus would look complete.
-    if (material && material.length > LIMITS.material) {
-      throw new AiError(`The course material is longer than ${LIMITS.material} characters.`, 400);
-    }
-  }
+  const material = await courseMaterial(ctx, course);
 
   const kept = course.planned_at
     ? outlineOf(await loadOutline(ctx, course.id)).filter((l) => l.started)
@@ -250,7 +398,7 @@ async function planCourse(ctx: Context, body: Body): Promise<void> {
     'plan_course',
     {
       tier: 'plan',
-      system: PLAN_SYSTEM,
+      system: inLanguage(PLAN_SYSTEM, langOf(body)),
       messages: [
         {
           role: 'user',
@@ -263,7 +411,12 @@ async function planCourse(ctx: Context, body: Body): Promise<void> {
               material,
             },
             course.planned_at
-              ? { kept, stages: (course.roadmap ?? []).map((s) => s.title), request }
+              ? {
+                  kept,
+                  stages: (course.roadmap ?? []).map((s) => s.title),
+                  request,
+                  scheduled: course.scheduled,
+                }
               : undefined,
           ),
         },
@@ -316,7 +469,7 @@ async function prepareLesson(ctx: Context, body: Body): Promise<void> {
     'prepare_lesson',
     {
       tier: 'light',
-      system: lessonSystem(subject, targetLang),
+      system: inLanguage(lessonSystem(subject, targetLang), langOf(body)),
       messages: [
         {
           role: 'user',
@@ -327,6 +480,8 @@ async function prepareLesson(ctx: Context, body: Body): Promise<void> {
             outline,
             lesson,
             existingTerms,
+            // A study course is taught from the student's own material.
+            material: await lessonMaterial(ctx, course, lesson, langOf(body)),
           }),
         },
       ],
@@ -338,14 +493,17 @@ async function prepareLesson(ctx: Context, body: Body): Promise<void> {
 
   const saved = await ctx.supabase.rpc('save_lesson_content', {
     p_lesson_id: lesson.id,
-    p_explanation: { intro: content.intro, key_points: content.key_points },
+    p_explanation: { lang: content.lang, steps: content.steps, key_points: content.key_points },
     p_items: content.items,
   });
   if (saved.error) throw new AiError(`Database error (lesson): ${saved.error.message}`, 500);
 }
 
 async function generatePractice(ctx: Context, body: Body): Promise<void> {
-  const { lesson, course } = await loadLesson(ctx, uuid(body.lessonId, 'lessonId'));
+  const { lesson, course, subject, targetLang } = await loadLesson(
+    ctx,
+    uuid(body.lessonId, 'lessonId'),
+  );
   if (!lesson.prepared_at) throw new AiError('Start the lesson first', 409);
   const items = must(
     await ctx.supabase
@@ -374,17 +532,23 @@ async function generatePractice(ctx: Context, body: Body): Promise<void> {
     'generate_practice',
     {
       tier: 'light',
-      system: PRACTICE_SYSTEM,
+      system: inLanguage(PRACTICE_SYSTEM, langOf(body)),
       messages: [
         {
           role: 'user',
-          content: practiceUser({ courseTitle: course.title ?? '', lesson, items: withProficiency }),
+          content: practiceUser({
+            courseTitle: course.title ?? '',
+            lesson,
+            targetLang: subject === 'language' ? targetLang : '',
+            items: withProficiency,
+            material: await lessonMaterial(ctx, course, lesson, langOf(body)),
+          }),
         },
       ],
       schema: PRACTICE_SCHEMA,
       maxTokens: 8000,
     },
-    (value) => validatePractice(value, items.length),
+    (value) => validatePractice(value, items.length, subject),
   );
 
   const stored: StoredPractice = {
@@ -433,14 +597,18 @@ async function chat(ctx: Context, body: Body): Promise<void> {
     'chat',
     {
       tier: 'light',
-      system: tutorSystem({
+      system: inLanguage(
+        tutorSystem({
         courseTitle: course.title ?? '',
         summary: course.summary ?? '',
         goal: course.goal,
         level: course.level,
         minutesPerDay: course.minutes_per_day,
-        outline: outlineOf(await loadOutline(ctx, course.id)),
-      }),
+          scheduled: course.scheduled,
+          outline: outlineOf(await loadOutline(ctx, course.id)),
+        }),
+        langOf(body),
+      ),
       messages: [...history, { role: 'user', content: text }],
       schema: TUTOR_REPLY_SCHEMA,
       maxTokens: 4000,
@@ -457,11 +625,181 @@ async function chat(ctx: Context, body: Body): Promise<void> {
   if (answered.error) throw new AiError(`Database error (reply): ${answered.error.message}`, 500);
 }
 
+const MEDIA_TYPES: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+};
+
+/**
+ * Loads an uploaded file from Storage as the logged-in user, so the bucket's
+ * policies decide whether it may be read (only files in the user's folder).
+ */
+async function loadUpload(ctx: Context, path: string): Promise<AiAttachment> {
+  const mediaType = MEDIA_TYPES[path.split('.').pop()?.toLowerCase() ?? ''];
+  if (!mediaType) throw new AiError('This kind of file cannot be read. Use a photo or a PDF.', 400);
+  const { data, error } = await ctx.supabase.storage.from('uploads').download(path);
+  if (error || !data) throw new AiError('The uploaded file was not found.', 404);
+  const bytes = new Uint8Array(await data.arrayBuffer());
+  if (bytes.length > LIMITS.uploadBytes) throw new AiError('The file is larger than 10 MB.', 400);
+  // Checked before the model is called: an empty file would only cost a failed request.
+  if (bytes.length < 200) {
+    throw new AiError('The uploaded file is empty. Delete it and add it again.', 400);
+  }
+  // btoa takes a string of bytes; building it in pieces keeps large files
+  // from overflowing the argument list.
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return { mediaType, base64: btoa(binary) };
+}
+
+/**
+ * Reads the next unread part of a file and appends it to the source's text.
+ * The app calls this until the file is read (read_at set). Reading in parts
+ * keeps every call well under the time an Edge Function may run, and a file
+ * half read can be continued later.
+ */
+async function readMaterial(ctx: Context, body: Body): Promise<void> {
+  const source = must(
+    await ctx.supabase
+      .from('sources')
+      .select('id, title, storage_path, part_paths, parts_read, text, read_at')
+      .eq('id', uuid(body.sourceId, 'sourceId'))
+      .maybeSingle(),
+    'File',
+  ) as {
+    id: string;
+    title: string;
+    storage_path: string | null;
+    part_paths: string[];
+    parts_read: number;
+    text: string | null;
+    read_at: string | null;
+  };
+  if (source.read_at) return; // already read, e.g. on another device
+  // Files uploaded before parts existed are one part: the whole file.
+  const paths =
+    source.part_paths.length > 0 ? source.part_paths : source.storage_path ? [source.storage_path] : [];
+  if (paths.length === 0) throw new AiError('This source has no file', 409);
+  const index = Math.min(source.parts_read, paths.length - 1);
+
+  const file = await loadUpload(ctx, paths[index]);
+  const { value: reading } = await runAi(
+    ctx,
+    'read_material',
+    {
+      tier: 'read',
+      system: READ_SYSTEM,
+      messages: [{ role: 'user', content: readUser(source.title, index + 1, paths.length) }],
+      attachments: [file],
+      schema: MATERIAL_READING_SCHEMA,
+      maxTokens: 16_000,
+    },
+    validateMaterialReading,
+  );
+  if (!reading.readable && paths.length === 1) {
+    throw new AiError('The file could not be read. Try a sharper photo with more light.', 422);
+  }
+
+  // An unreadable part of a longer file is marked, not fatal: the rest is still worth having.
+  const partText = reading.readable ? reading.text : `[Part ${index + 1} of the file could not be read.]`;
+  const done = index + 1 >= paths.length;
+  const saved = await ctx.supabase
+    .from('sources')
+    .update({
+      text: source.text ? `${source.text}\n\n${partText}` : partText,
+      parts_read: index + 1,
+      read_at: done ? new Date().toISOString() : null,
+      // The first part names the file and says what it is.
+      ...(index === 0 && reading.readable && { title: reading.title, role: reading.role }),
+    })
+    .eq('id', source.id)
+    // Two devices reading the same file must not append the same part twice.
+    .eq('parts_read', source.parts_read);
+  if (saved.error) throw new AiError(`Database error (file): ${saved.error.message}`, 500);
+}
+
+async function checkHomework(ctx: Context, body: Body): Promise<void> {
+  const homework = must(
+    await ctx.supabase
+      .from('homework')
+      .select('id, course_id, task, task_path, solution_paths, mode')
+      .eq('id', uuid(body.homeworkId, 'homeworkId'))
+      .maybeSingle(),
+    'Homework',
+  ) as {
+    id: string;
+    course_id: string;
+    task: string | null;
+    task_path: string | null;
+    solution_paths: string[];
+    mode: HomeworkMode;
+  };
+  if (homework.solution_paths.length === 0) {
+    throw new AiError('Add a photo of your solution first', 409);
+  }
+  const course = await loadCourse(ctx, homework.course_id);
+
+  // A typed task wins over a photo of it; the photo is only read when needed.
+  const taskPhoto = homework.task ? null : homework.task_path;
+  const paths = [...(taskPhoto ? [taskPhoto] : []), ...homework.solution_paths];
+  const attachments = await Promise.all(paths.map((path) => loadUpload(ctx, path)));
+
+  const { value: check, model } = await runAi(
+    ctx,
+    'check_homework',
+    {
+      tier: 'plan',
+      system: inLanguage(homeworkSystem(homework.mode), langOf(body)),
+      messages: [
+        {
+          role: 'user',
+          content: homeworkUser({
+            courseTitle: course.title ?? '',
+            goal: course.goal,
+            task: homework.task,
+            pages: homework.solution_paths.length,
+          }),
+        },
+      ],
+      attachments,
+      schema: HOMEWORK_CHECK_SCHEMA,
+      maxTokens: 16_000,
+    },
+    (value) => validateHomeworkCheck(value, homework.mode),
+  );
+
+  const result: HomeworkResult = {
+    verdict: check.verdict,
+    score: check.score,
+    summary: check.summary,
+    steps: check.steps,
+    hint: check.hint,
+  };
+  const saved = await ctx.supabase
+    .from('homework')
+    .update({
+      task: homework.task ?? (check.task || null),
+      transcription: check.transcription,
+      result,
+      model,
+      checked_at: new Date().toISOString(),
+    })
+    .eq('id', homework.id);
+  if (saved.error) throw new AiError(`Database error (homework): ${saved.error.message}`, 500);
+}
+
 const TASKS: Record<string, (ctx: Context, body: Body) => Promise<void>> = {
   plan_course: planCourse,
   prepare_lesson: prepareLesson,
   generate_practice: generatePractice,
   chat,
+  read_material: readMaterial,
+  check_homework: checkHomework,
 };
 
 const handle = withSupabase({ auth: 'user' }, async (req, ctx) => {

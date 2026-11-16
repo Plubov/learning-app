@@ -22,6 +22,8 @@ export type CoursePlan = {
   subject: Subject;
   /** ISO 639-1 code of the language being learned; '' unless subject is 'language'. */
   target_lang: string;
+  /** false when the learner wants no week schedule; every lesson's week is then the same. */
+  scheduled: boolean;
   /** The roadmap: a few stages, each with what the learner can do at its end. */
   stages: { title: string; outcome: string }[];
   lessons: {
@@ -35,16 +37,38 @@ export type CoursePlan = {
   }[];
 };
 
+/**
+ * A piece of a step's text. `target` marks text in the language being
+ * learned, so the app can read each piece aloud with the right voice.
+ */
+export type StepPart = { text: string; target: boolean };
+
+/** One short block of a lesson's introduction, shown (and read aloud) on its own. */
+export type LessonStep = { parts: StepPart[] };
+
 export type LessonContent = {
-  intro: string;
+  /** ISO 639-1 code of the language the explanation is written in (the learner's). */
+  lang: string;
+  steps: LessonStep[];
   key_points: string[];
   items: { kind: ItemKind; term: string; meaning: string; notes: string }[];
 };
 
-/** The part of LessonContent kept on the lesson row (items become rows of their own). */
-export type LessonExplanation = Pick<LessonContent, 'intro' | 'key_points'>;
+/**
+ * The part of LessonContent kept on the lesson row (items become rows of
+ * their own). Lessons prepared before the introduction was split into steps
+ * have one text, `intro`, instead; src/lib/lesson-flow.ts reads both.
+ */
+export type LessonExplanation =
+  | Pick<LessonContent, 'lang' | 'steps' | 'key_points'>
+  | { intro: string; key_points: string[] };
 
-export type QuestionKind = 'choice' | 'typed';
+/**
+ * choice: pick one option. typed: type a word or phrase. build: put the
+ * words of a sentence in order (language courses).
+ */
+export type QuestionKind = 'choice' | 'typed' | 'build';
+export const QUESTION_KINDS: readonly QuestionKind[] = ['choice', 'typed', 'build'];
 
 /** Practice as the model writes it: questions point at items by list position. */
 export type Practice = {
@@ -53,7 +77,7 @@ export type Practice = {
     item: number;
     kind: QuestionKind;
     prompt: string;
-    /** 3 or 4 options for 'choice'; empty for 'typed'. */
+    /** 3 or 4 options for 'choice'; empty for 'typed'; extra wrong words for 'build'. */
     options: string[];
     answer: string;
     explanation: string;
@@ -71,6 +95,51 @@ export type TutorReply = {
   /** Instruction for the planner when the learner wants the plan changed; '' otherwise. */
   plan_change: string;
 };
+
+export type SourceRole = 'material' | 'exercises' | 'notes';
+export const SOURCE_ROLES: readonly SourceRole[] = ['material', 'exercises', 'notes'];
+
+/** An uploaded file (scan, photo, PDF) as AI read it. */
+export type MaterialReading = {
+  title: string;
+  role: SourceRole;
+  /** The content as Markdown, formulas in LaTeX; '' when nothing could be read. */
+  text: string;
+  readable: boolean;
+};
+
+/**
+ * correct / partly / wrong: the graded outcome. unreadable: the photos could
+ * not be read. open: not graded, because the learner asked for a hint.
+ */
+export type HomeworkVerdict = 'correct' | 'partly' | 'wrong' | 'unreadable' | 'open';
+export const HOMEWORK_VERDICTS: readonly HomeworkVerdict[] = [
+  'correct',
+  'partly',
+  'wrong',
+  'unreadable',
+  'open',
+];
+export type HomeworkMode = 'check' | 'hint';
+
+/** What AI found in a handwritten homework solution. */
+export type HomeworkCheck = {
+  /** The task as text (read from the photo when it was not typed). */
+  task: string;
+  /** The solution as read from the photos. */
+  transcription: string;
+  verdict: HomeworkVerdict;
+  /** 0 to 100; 0 when not graded. */
+  score: number;
+  summary: string;
+  /** The learner's steps in order, each checked. */
+  steps: { text: string; ok: boolean; comment: string }[];
+  /** What to do next, without giving the solution away. */
+  hint: string;
+};
+
+/** The part of HomeworkCheck kept in homework.result. */
+export type HomeworkResult = Omit<HomeworkCheck, 'task' | 'transcription'>;
 
 export type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -92,6 +161,28 @@ export const LIMITS = {
   lessons: 60,
   stages: 8,
   itemsPerLesson: 12,
+  /** Text AI reads out of one part of an uploaded file, in characters. */
+  reading: 60_000,
+  /**
+   * All material of a course together, as given to the model for the plan
+   * and for each lesson of a study course (roughly 150,000 tokens).
+   */
+  courseMaterial: 600_000,
+  /**
+   * Material given to the model for one lesson of a study course, in
+   * characters: the sections chosen for the lesson. A course whose whole
+   * material is shorter than this gets all of it.
+   */
+  lessonMaterial: 40_000,
+  /** Sections chosen for one lesson. */
+  lessonSections: 10,
+  /** Photos of one homework solution. */
+  solutionPages: 6,
+  /** One uploaded file, in bytes (also the Storage bucket's limit). */
+  uploadBytes: 10 * 1024 * 1024,
+  steps: 10,
+  /** Characters of one introduction step: two or three short sentences. */
+  stepText: 320,
   questions: 10,
   term: 120,
 } as const;
@@ -115,6 +206,7 @@ export const COURSE_PLAN_SCHEMA = object({
   summary: text,
   subject: { type: 'string', enum: SUBJECTS },
   target_lang: text,
+  scheduled: { type: 'boolean' },
   stages: { type: 'array', items: object({ title: text, outcome: text }) },
   lessons: {
     type: 'array',
@@ -129,7 +221,13 @@ export const COURSE_PLAN_SCHEMA = object({
 });
 
 export const LESSON_CONTENT_SCHEMA = object({
-  intro: text,
+  lang: text,
+  steps: {
+    type: 'array',
+    items: object({
+      parts: { type: 'array', items: object({ text, target: { type: 'boolean' } }) },
+    }),
+  },
   key_points: textList,
   items: {
     type: 'array',
@@ -148,7 +246,7 @@ export const PRACTICE_SCHEMA = object({
     type: 'array',
     items: object({
       item: { type: 'integer' },
-      kind: { type: 'string', enum: ['choice', 'typed'] },
+      kind: { type: 'string', enum: QUESTION_KINDS },
       prompt: text,
       options: textList,
       answer: text,
@@ -158,6 +256,28 @@ export const PRACTICE_SCHEMA = object({
 });
 
 export const TUTOR_REPLY_SCHEMA = object({ reply: text, plan_change: text });
+
+export const SECTION_CHOICE_SCHEMA = object({ sections: { type: 'array', items: { type: 'integer' } } });
+
+export const MATERIAL_READING_SCHEMA = object({
+  readable: { type: 'boolean' },
+  title: text,
+  role: { type: 'string', enum: SOURCE_ROLES },
+  text,
+});
+
+export const HOMEWORK_CHECK_SCHEMA = object({
+  task: text,
+  transcription: text,
+  steps: {
+    type: 'array',
+    items: object({ text, ok: { type: 'boolean' }, comment: text }),
+  },
+  verdict: { type: 'string', enum: HOMEWORK_VERDICTS },
+  score: { type: 'integer' },
+  summary: text,
+  hint: text,
+});
 
 // --- Validators --------------------------------------------------------------
 
@@ -234,6 +354,8 @@ export function validateCoursePlan(value: unknown, minWeek = 1): Validated<Cours
         outcome: str(stage.outcome, `stages[${i}].outcome`, 400),
       };
     });
+    if (typeof plan.scheduled !== 'boolean') throw new Invalid('scheduled is not true or false');
+    const scheduled = plan.scheduled;
     let week = minWeek;
     let stageIndex = 0;
     const lessons = list(plan.lessons, 'lessons', 1, LIMITS.lessons).map((entry, i) => {
@@ -243,7 +365,8 @@ export function validateCoursePlan(value: unknown, minWeek = 1): Validated<Cours
         title: str(lesson.title, `${where}.title`, 120),
         summary: str(lesson.summary, `${where}.summary`, 600),
         objectives: strings(lesson.objectives, `${where}.objectives`, 1, 6, 300),
-        week: int(lesson.week, `${where}.week`, minWeek, 104),
+        // Without a schedule the weeks mean nothing; they are stored as one value.
+        week: scheduled ? int(lesson.week, `${where}.week`, minWeek, 104) : minWeek,
         stage: int(lesson.stage, `${where}.stage`, 0, stages.length - 1),
       };
       // Lessons are in study order, so weeks and stages never go backwards.
@@ -258,6 +381,7 @@ export function validateCoursePlan(value: unknown, minWeek = 1): Validated<Cours
       summary: str(plan.summary, 'summary', 1000),
       subject,
       target_lang: subject === 'language' ? targetLang : '',
+      scheduled,
       stages,
       lessons,
     };
@@ -286,16 +410,47 @@ export function validateLessonContent(
         notes: str(item.notes, `${where}.notes`, 600, true),
       };
     });
+    const lang = str(content.lang, 'lang', 8).toLowerCase();
+    if (!/^[a-z]{2,3}$/.test(lang)) throw new Invalid('lang is not a language code');
+    const steps = list(content.steps, 'steps', 2, LIMITS.steps).map((entry, i) => {
+      const where = `steps[${i}]`;
+      const parts = list(record(entry, where).parts, `${where}.parts`, 1, 12).map((piece, j) => {
+        const part = record(piece, `${where}.parts[${j}]`);
+        if (typeof part.text !== 'string') throw new Invalid(`${where}.parts[${j}].text is not text`);
+        if (typeof part.target !== 'boolean') {
+          throw new Invalid(`${where}.parts[${j}].target is not true or false`);
+        }
+        // Not trimmed: the spaces between pieces belong to the sentence.
+        // Only a language course has text in a language being learned.
+        return { text: part.text.normalize('NFC'), target: part.target && subject === 'language' };
+      });
+      const whole = parts.map((part) => part.text).join('').trim();
+      if (whole === '') throw new Invalid(`${where} is empty`);
+      if (whole.length > LIMITS.stepText) {
+        throw new Invalid(`${where} is longer than ${LIMITS.stepText} characters; split it into two steps`);
+      }
+      return { parts: parts.filter((part) => part.text !== '') };
+    });
     return {
-      intro: str(content.intro, 'intro', 4000),
+      lang,
+      steps,
       key_points: strings(content.key_points, 'key_points', 1, 8, 500),
       items,
     };
   });
 }
 
+/** A word as compared when a sentence is built from tiles: no punctuation, lower case. */
+export function wordKey(word: string): string {
+  return word.normalize('NFC').replace(/[.,!?;:"'。、！？]/g, '').toLowerCase();
+}
+
 /** @param itemCount number of items the questions may point at (0 … itemCount-1). */
-export function validatePractice(value: unknown, itemCount: number): Validated<Practice> {
+export function validatePractice(
+  value: unknown,
+  itemCount: number,
+  subject: Subject = 'language',
+): Validated<Practice> {
   return run(() => {
     const practice = record(value, 'practice');
     const examples = list(practice.examples, 'examples', 0, 6).map((entry, i) => {
@@ -308,9 +463,24 @@ export function validatePractice(value: unknown, itemCount: number): Validated<P
     const questions = list(practice.questions, 'questions', 1, LIMITS.questions).map((entry, i) => {
       const where = `questions[${i}]`;
       const question = record(entry, where);
-      const kind = oneOf<QuestionKind>(question.kind, `${where}.kind`, ['choice', 'typed']);
+      const kind = oneOf<QuestionKind>(question.kind, `${where}.kind`, QUESTION_KINDS);
       const answer = str(question.answer, `${where}.answer`, kind === 'typed' ? LIMITS.term : 300);
       let options: string[] = [];
+      if (kind === 'build') {
+        if (subject !== 'language') {
+          throw new Invalid(`${where}.kind "build" is only for language courses`);
+        }
+        const words = answer.split(/\s+/).map(wordKey);
+        if (words.length < 2 || words.length > 10) {
+          throw new Invalid(`${where}.answer must be a sentence of 2 to 10 words`);
+        }
+        const extra = strings(question.options, `${where}.options`, 0, 5, 40);
+        if (extra.some((word) => /\s/.test(word))) {
+          throw new Invalid(`${where}.options must be single words`);
+        }
+        // A wrong word that is also in the sentence would make two orders right.
+        options = [...new Set(extra)].filter((word) => !words.includes(wordKey(word)));
+      }
       if (kind === 'choice') {
         options = strings(question.options, `${where}.options`, 3, 4, 300);
         if (new Set(options).size !== options.length) {
@@ -342,3 +512,58 @@ export function validateTutorReply(value: unknown): Validated<TutorReply> {
     };
   });
 }
+
+export function validateMaterialReading(value: unknown): Validated<MaterialReading> {
+  return run(() => {
+    const reading = record(value, 'reading');
+    if (typeof reading.readable !== 'boolean') throw new Invalid('readable is not true or false');
+    const body = str(reading.text, 'text', LIMITS.reading, true);
+    // "Readable" with nothing read is not usable either.
+    const readable = reading.readable && body !== '';
+    return {
+      readable,
+      title: str(reading.title, 'title', 120, !readable) || 'Unreadable file',
+      role: oneOf(reading.role, 'role', SOURCE_ROLES),
+      text: readable ? body : '',
+    };
+  });
+}
+
+/** @param mode a hint is never graded: its verdict is 'open' and its score 0. */
+export function validateHomeworkCheck(value: unknown, mode: HomeworkMode): Validated<HomeworkCheck> {
+  return run(() => {
+    const check = record(value, 'check');
+    let verdict = oneOf(check.verdict, 'verdict', HOMEWORK_VERDICTS);
+    let score = int(check.score, 'score', 0, 100);
+    if (verdict === 'unreadable') {
+      score = 0;
+    } else if (mode === 'hint') {
+      verdict = 'open';
+      score = 0;
+    } else if (verdict === 'open') {
+      throw new Invalid('verdict "open" is only for hints; grade the solution');
+    }
+    const steps = list(check.steps, 'steps', 0, 40).map((entry, i) => {
+      const step = record(entry, `steps[${i}]`);
+      if (typeof step.ok !== 'boolean') throw new Invalid(`steps[${i}].ok is not true or false`);
+      return {
+        text: str(step.text, `steps[${i}].text`, 2000),
+        ok: step.ok,
+        comment: str(step.comment, `steps[${i}].comment`, 2000, true),
+      };
+    });
+    return {
+      task: str(check.task, 'task', 20_000, verdict === 'unreadable'),
+      transcription: str(check.transcription, 'transcription', 40_000, true),
+      verdict,
+      score,
+      summary: str(check.summary, 'summary', 3000),
+      steps,
+      hint: str(check.hint, 'hint', 3000, true),
+    };
+  });
+}
+
+/** The languages the app can be shown in; AI text is written in the chosen one. */
+export const APP_LANGUAGES = ['en', 'de', 'es', 'ko'] as const;
+export type AppLanguage = (typeof APP_LANGUAGES)[number];

@@ -7,17 +7,25 @@
  */
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
+import { getLanguage } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
 async function callAi(body: Record<string, unknown>): Promise<void> {
-  const { error } = await supabase.functions.invoke('ai', { body });
+  // The app's language goes along, so everything the AI writes is in it.
+  const { error } = await supabase.functions.invoke('ai', { body: { ...body, lang: getLanguage() } });
   if (!error) return;
   let message = 'The AI service could not be reached. Check your connection and try again.';
   if (error instanceof FunctionsHttpError) {
     // The function answers errors as {"error": "sentence for the learner"}.
-    const answer: unknown = await (error.context as Response).json().catch(() => null);
+    const response = error.context as Response;
+    const answer: unknown = await response.json().catch(() => null);
     if (typeof answer === 'object' && answer !== null && 'error' in answer) {
       message = String(answer.error);
+    } else if (response.status === 504 || response.status === 546) {
+      // The platform stopped the function: it ran too long or used too much memory.
+      message = 'This took too long on the server and was stopped. Try again; if it is a file, use a smaller one.';
+    } else {
+      message = `The server answered with an error (${response.status}). Try again.`;
     }
   }
   throw new Error(message);
@@ -53,4 +61,22 @@ export function generatePractice(
 /** Sends one message to the course's tutor; the reply is stored in course_messages. */
 export function askTutor(courseId: string, message: string): Promise<void> {
   return callAi({ task: 'chat', courseId, message });
+}
+
+/**
+ * Reads the next unread part of an uploaded file (a photo, or a few pages of
+ * a PDF) into text and appends it to the source. Call it until the source is
+ * read; see readAllParts in study.ts. One call takes up to about a minute.
+ */
+export function readMaterial(sourceId: string): Promise<void> {
+  return callAi({ task: 'read_material', sourceId });
+}
+
+/**
+ * Reads the photos of a handwritten solution and checks it, or gives a hint
+ * for the next step, depending on the homework's mode. The result is stored
+ * on the homework row.
+ */
+export function gradeAnswer(homeworkId: string): Promise<void> {
+  return callAi({ task: 'check_homework', homeworkId });
 }

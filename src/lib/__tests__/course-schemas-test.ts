@@ -1,5 +1,7 @@
 import {
   validateCoursePlan,
+  validateHomeworkCheck,
+  validateMaterialReading,
   validateLessonContent,
   validatePractice,
   validateTutorReply,
@@ -11,6 +13,7 @@ function plan(overrides: Record<string, unknown> = {}) {
     summary: 'From Hangul to simple sentences.',
     subject: 'language',
     target_lang: 'KO',
+    scheduled: true,
     stages: [
       { title: 'Foundations', outcome: 'Read and greet.' },
       { title: 'Sentences', outcome: 'Build simple sentences.' },
@@ -72,6 +75,20 @@ describe('validateCoursePlan', () => {
     expect(validateCoursePlan(plan(), 1).ok).toBe(true);
   });
 
+  it('ignores the weeks of a plan without a schedule', () => {
+    const lessons = [
+      { title: 'A', summary: 'B', objectives: ['C'], week: 5, stage: 0 },
+      { title: 'D', summary: 'E', objectives: ['F'], week: 0, stage: 0 },
+    ];
+    const result = validateCoursePlan(plan({ scheduled: false, lessons }), 3);
+    expect(result.ok && result.value.scheduled).toBe(false);
+    expect(result.ok && result.value.lessons.map((l) => l.week)).toEqual([3, 3]);
+  });
+
+  it('rejects a plan that does not say whether it is scheduled', () => {
+    expect(validateCoursePlan(plan({ scheduled: undefined })).ok).toBe(false);
+  });
+
   it('rejects values that are not objects', () => {
     expect(validateCoursePlan(null).ok).toBe(false);
     expect(validateCoursePlan('plan').ok).toBe(false);
@@ -81,7 +98,17 @@ describe('validateCoursePlan', () => {
 
 describe('validateLessonContent', () => {
   const content = {
-    intro: 'Greetings depend on politeness.',
+    lang: 'EN',
+    steps: [
+      { parts: [{ text: 'How do you say hello to a stranger?', target: false }] },
+      {
+        parts: [
+          { text: 'You say ', target: false },
+          { text: '안녕하세요'.normalize('NFD'), target: true },
+          { text: '.', target: false },
+        ],
+      },
+    ],
     key_points: ['안녕하세요 is polite.'],
     items: [
       { kind: 'vocab', term: '안녕하세요', meaning: 'hello', notes: '' },
@@ -92,6 +119,32 @@ describe('validateLessonContent', () => {
   it('accepts a good lesson', () => {
     const result = validateLessonContent(content, 'language');
     expect(result.ok && result.value.items).toHaveLength(2);
+  });
+
+  it('keeps the spaces inside step parts and cleans the rest', () => {
+    const result = validateLessonContent(content, 'language');
+    expect(result.ok && result.value.lang).toBe('en');
+    expect(result.ok && result.value.steps[1].parts).toEqual([
+      { text: 'You say ', target: false },
+      { text: '안녕하세요', target: true },
+      { text: '.', target: false },
+    ]);
+  });
+
+  it('marks no text as the language being learned outside language courses', () => {
+    const science = { ...content, items: [{ kind: 'fact', term: 'Inertia', meaning: 'x', notes: '' }] };
+    const result = validateLessonContent(science, 'science');
+    expect(result.ok && result.value.steps[1].parts.some((part) => part.target)).toBe(false);
+  });
+
+  it.each([
+    ['a step that is too long', { steps: [content.steps[0], { parts: [{ text: 'x'.repeat(321), target: false }] }] }],
+    ['an empty step', { steps: [content.steps[0], { parts: [{ text: '  ', target: false }] }] }],
+    ['a single step', { steps: [content.steps[0]] }],
+    ['a part without target', { steps: [content.steps[0], { parts: [{ text: 'x' }] }] }],
+    ['a language name instead of a code', { lang: 'English' }],
+  ])('rejects %s', (_name, overrides) => {
+    expect(validateLessonContent({ ...content, ...overrides }, 'language').ok).toBe(false);
   });
 
   it('rejects item kinds that do not fit the subject', () => {
@@ -147,6 +200,33 @@ describe('validatePractice', () => {
     expect(validatePractice({ examples: [], questions: [question] }, 2).ok).toBe(false);
   });
 
+  describe('build questions', () => {
+    const build = {
+      item: 0,
+      kind: 'build',
+      prompt: 'Water, please.',
+      options: ['차', '물', '밥'],
+      answer: '물 주세요.',
+      explanation: '',
+    };
+
+    it('accepts a sentence and drops wrong words that are in it', () => {
+      const result = validatePractice({ examples: [], questions: [build] }, 2);
+      expect(result.ok && result.value.questions[0].options).toEqual(['차', '밥']);
+    });
+
+    it.each([
+      ['a one-word answer', { ...build, answer: '물' }],
+      ['a wrong "word" made of two words', { ...build, options: ['차 한 잔'] }],
+    ])('rejects %s', (_name, question) => {
+      expect(validatePractice({ examples: [], questions: [question] }, 2).ok).toBe(false);
+    });
+
+    it('rejects them outside language courses', () => {
+      expect(validatePractice({ examples: [], questions: [build] }, 2, 'science').ok).toBe(false);
+    });
+  });
+
   it('rejects practice without questions', () => {
     expect(validatePractice({ examples: [], questions: [] }, 2).ok).toBe(false);
   });
@@ -161,5 +241,68 @@ describe('validateTutorReply', () => {
 
   it('rejects an empty reply', () => {
     expect(validateTutorReply({ reply: '', plan_change: '' }).ok).toBe(false);
+  });
+});
+
+describe('validateMaterialReading', () => {
+  const reading = { readable: true, title: ' Sheet 4 ', role: 'exercises', text: 'Exercise 1: $x^2$' };
+
+  it('accepts a read file and cleans its title', () => {
+    const result = validateMaterialReading(reading);
+    expect(result.ok && result.value.title).toBe('Sheet 4');
+    expect(result.ok && result.value.readable).toBe(true);
+  });
+
+  it('treats a file with no text as unreadable', () => {
+    const result = validateMaterialReading({ ...reading, text: '  ' });
+    expect(result.ok && result.value.readable).toBe(false);
+    const blank = validateMaterialReading({ readable: false, title: '', role: 'notes', text: '' });
+    expect(blank.ok && blank.value.readable).toBe(false);
+  });
+
+  it('rejects an unknown role and a readable file without a title', () => {
+    expect(validateMaterialReading({ ...reading, role: 'video' }).ok).toBe(false);
+    expect(validateMaterialReading({ ...reading, title: '' }).ok).toBe(false);
+  });
+});
+
+describe('validateHomeworkCheck', () => {
+  const check = {
+    task: 'Differentiate $x^2$.',
+    transcription: "f'(x) = 2x",
+    steps: [{ text: "f'(x) = 2x", ok: true, comment: '' }],
+    verdict: 'correct',
+    score: 100,
+    summary: 'All right.',
+    hint: '',
+  };
+
+  it('accepts a graded solution', () => {
+    const result = validateHomeworkCheck(check, 'check');
+    expect(result.ok && result.value.verdict).toBe('correct');
+    expect(result.ok && result.value.score).toBe(100);
+  });
+
+  it('never grades a hint', () => {
+    const result = validateHomeworkCheck({ ...check, verdict: 'wrong', score: 20 }, 'hint');
+    expect(result.ok && result.value.verdict).toBe('open');
+    expect(result.ok && result.value.score).toBe(0);
+  });
+
+  it('keeps "unreadable" in both modes, with no score and no task needed', () => {
+    for (const mode of ['check', 'hint'] as const) {
+      const result = validateHomeworkCheck({ ...check, verdict: 'unreadable', score: 50, task: '' }, mode);
+      expect(result.ok && result.value.verdict).toBe('unreadable');
+      expect(result.ok && result.value.score).toBe(0);
+    }
+  });
+
+  it.each([
+    ['an ungraded check', { ...check, verdict: 'open' }],
+    ['a score above 100', { ...check, score: 120 }],
+    ['a step without a verdict', { ...check, steps: [{ text: 'x', comment: '' }] }],
+    ['an empty summary', { ...check, summary: '' }],
+  ])('rejects %s', (_name, value) => {
+    expect(validateHomeworkCheck(value, 'check').ok).toBe(false);
   });
 });
