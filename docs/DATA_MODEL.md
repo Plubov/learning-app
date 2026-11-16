@@ -133,6 +133,7 @@ A goal turned into a plan. See "Courses" in SPEC.md.
 
 | column | type | note |
 |---|---|---|
+| kind | text | 'guided' (default) or 'study': a university course with uploaded material and homework |
 | goal | text | what the learner typed (max 2000 characters) |
 | level | text null | what they already know |
 | weeks | int null | wanted duration; null = the planner decides |
@@ -141,6 +142,7 @@ A goal turned into a plan. See "Courses" in SPEC.md.
 | deck_id | uuid null | the deck holding the course's items; created with the first plan |
 | title, summary | text null | from the plan |
 | roadmap | jsonb null | stages: `[{"title", "outcome"}]` |
+| scheduled | boolean | default true; false = no week schedule, lessons in order at the learner's pace |
 | planned_at | timestamptz null | null = no plan yet |
 | plan_model | text null | model that wrote the current plan |
 
@@ -151,14 +153,17 @@ A goal turned into a plan. See "Courses" in SPEC.md.
 | course_id | uuid | |
 | position | int | order within the course |
 | stage | int | index into `courses.roadmap` |
-| week | int | timeline: week of the course, from 1 |
+| week | int | timeline: week of the course, from 1; not shown when the course is not scheduled |
 | title, summary | text | |
 | objectives | jsonb | list of strings |
-| explanation | jsonb null | `{"intro", "key_points": [...]}`; written once |
+| explanation | jsonb null | `{"lang", "steps": [{"parts": [{"text", "target"}]}], "key_points": [...]}`; written once. `lang` is the language of the text, `target` marks text in the language being learned (for reading aloud). Lessons prepared before 2026-11-16 have `{"intro", "key_points"}` |
 | prepared_at | timestamptz null | null = not started, no items yet |
-| practice | jsonb null | latest practice: `{"examples": [{"text", "explanation"}], "questions": [{"item_id", "kind": "choice" or "typed", "prompt", "options", "answer", "explanation"}]}` |
+| learned_at | timestamptz null | first time the guided run ("Learn") was finished |
+| material_refs | jsonb null | study courses: the sections of the material this lesson is written from, `[{"source", "index"}]` |
+| material_at | timestamptz null | when those sections were chosen; material read later makes the choice stale |
+| practice | jsonb null | latest practice: `{"examples": [{"text", "explanation"}], "questions": [{"item_id", "kind": "choice", "typed" or "build", "prompt", "options", "answer", "explanation"}]}`; for "build", `answer` is the sentence and `options` the extra wrong words |
 | practice_at | timestamptz null | |
-| completed_at | timestamptz null | first finished quiz |
+| completed_at | timestamptz null | first finished practice session |
 
 The jsonb shapes and their validators are defined once, in
 `supabase/functions/_shared/course-schemas.ts`, used by the Edge Function
@@ -300,3 +305,48 @@ trigger.
 - Shared decks between users (friends stage): copy on share, or shared rows?
 - Conflict handling when two devices review the same card before syncing:
   events merge safely (append-only); card state is recomputed from events.
+
+### sources: files of a course
+
+Since study courses, a source can be an uploaded file of a course:
+
+| column | type | note |
+|---|---|---|
+| course_id | uuid null | the course the file belongs to; deleted with the course |
+| storage_path | text null | unused since files are stored in parts |
+| part_paths | text[] | the file's parts in the Storage bucket `uploads`, in order: a photo is one part, a PDF is cut into parts of four pages |
+| parts_read | int | how many parts AI has read into `text` so far |
+| mime_type | text null | |
+| role | text null | 'material', 'exercises' or 'notes', as AI judged the file |
+| read_at | timestamptz null | when the last part was read; null = not (completely) read yet |
+
+### homework
+
+One task and the learner's handwritten solution, with what AI read and found.
+
+| column | type | note |
+|---|---|---|
+| course_id | uuid | |
+| task | text null | typed, or read by AI from `task_path`; one of the two is set |
+| task_path | text null | photo of the task in Storage |
+| solution_paths | text[] | photos of the solution, in page order (at most 6) |
+| mode | text | 'check' (grade it) or 'hint' (help with the next step) |
+| transcription | text null | the solution as AI read it |
+| result | jsonb null | `{"verdict": "correct", "partly", "wrong", "unreadable" or "open", "score": 0..100, "summary", "steps": [{"text", "ok", "comment"}], "hint"}` |
+| model | text null | |
+| checked_at | timestamptz null | null = not checked yet |
+
+### Storage bucket `uploads`
+
+Private, 10 MB per file, JPEG, PNG, WebP and PDF only. A file's path is
+`<user id>/<course id>/<unique name>`; the policies on `storage.objects`
+allow reading, adding and deleting only inside the folder named after one's
+own user id.
+
+### decks: study settings
+
+| column | type | note |
+|---|---|---|
+| active | boolean | default true; false = paused, not in the daily session |
+| priority | boolean | default false; the learner's current priority |
+| exam_date | date null | exam on the deck's content; changes ts-fsrs's maximum interval and desired retention until then |

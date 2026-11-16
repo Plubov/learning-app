@@ -168,11 +168,13 @@ export type Database = {
           deck_id: string | null
           goal: string
           id: string
+          kind: string
           level: string | null
           minutes_per_day: number
           plan_model: string | null
           planned_at: string | null
           roadmap: Json | null
+          scheduled: boolean
           source_id: string | null
           summary: string | null
           title: string | null
@@ -185,11 +187,13 @@ export type Database = {
           deck_id?: string | null
           goal: string
           id?: string
+          kind?: string
           level?: string | null
           minutes_per_day?: number
           plan_model?: string | null
           planned_at?: string | null
           roadmap?: Json | null
+          scheduled?: boolean
           source_id?: string | null
           summary?: string | null
           title?: string | null
@@ -202,11 +206,13 @@ export type Database = {
           deck_id?: string | null
           goal?: string
           id?: string
+          kind?: string
           level?: string | null
           minutes_per_day?: number
           plan_model?: string | null
           planned_at?: string | null
           roadmap?: Json | null
+          scheduled?: boolean
           source_id?: string | null
           summary?: string | null
           title?: string | null
@@ -275,36 +281,101 @@ export type Database = {
       }
       decks: {
         Row: {
+          active: boolean
           created_at: string
+          exam_date: string | null
           id: string
           name: string
           new_per_day: number
+          priority: boolean
           subject: string
           target_lang: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
+          exam_date?: string | null
           id?: string
           name: string
           new_per_day?: number
+          priority?: boolean
           subject?: string
           target_lang?: string | null
           updated_at?: string
           user_id?: string
         }
         Update: {
+          active?: boolean
           created_at?: string
+          exam_date?: string | null
           id?: string
           name?: string
           new_per_day?: number
+          priority?: boolean
           subject?: string
           target_lang?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: []
+      }
+      homework: {
+        Row: {
+          checked_at: string | null
+          course_id: string
+          created_at: string
+          id: string
+          mode: string
+          model: string | null
+          result: Json | null
+          solution_paths: string[]
+          task: string | null
+          task_path: string | null
+          transcription: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          checked_at?: string | null
+          course_id: string
+          created_at?: string
+          id?: string
+          mode?: string
+          model?: string | null
+          result?: Json | null
+          solution_paths?: string[]
+          task?: string | null
+          task_path?: string | null
+          transcription?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          checked_at?: string | null
+          course_id?: string
+          created_at?: string
+          id?: string
+          mode?: string
+          model?: string | null
+          result?: Json | null
+          solution_paths?: string[]
+          task?: string | null
+          task_path?: string | null
+          transcription?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "homework_course_id_user_id_fkey"
+            columns: ["course_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
       }
       items: {
         Row: {
@@ -383,6 +454,9 @@ export type Database = {
           created_at: string
           explanation: Json | null
           id: string
+          learned_at: string | null
+          material_at: string | null
+          material_refs: Json | null
           objectives: Json
           position: number
           practice: Json | null
@@ -401,6 +475,9 @@ export type Database = {
           created_at?: string
           explanation?: Json | null
           id?: string
+          learned_at?: string | null
+          material_at?: string | null
+          material_refs?: Json | null
           objectives?: Json
           position: number
           practice?: Json | null
@@ -419,6 +496,9 @@ export type Database = {
           created_at?: string
           explanation?: Json | null
           id?: string
+          learned_at?: string | null
+          material_at?: string | null
+          material_refs?: Json | null
           objectives?: Json
           position?: number
           practice?: Json | null
@@ -543,9 +623,15 @@ export type Database = {
       }
       sources: {
         Row: {
+          course_id: string | null
           created_at: string
           id: string
           kind: string
+          mime_type: string | null
+          part_paths: string[]
+          parts_read: number
+          read_at: string | null
+          role: string | null
           storage_path: string | null
           text: string | null
           title: string
@@ -553,9 +639,15 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          course_id?: string | null
           created_at?: string
           id?: string
           kind: string
+          mime_type?: string | null
+          part_paths?: string[]
+          parts_read?: number
+          read_at?: string | null
+          role?: string | null
           storage_path?: string | null
           text?: string | null
           title: string
@@ -563,16 +655,30 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          course_id?: string | null
           created_at?: string
           id?: string
           kind?: string
+          mime_type?: string | null
+          part_paths?: string[]
+          parts_read?: number
+          read_at?: string | null
+          role?: string | null
           storage_path?: string | null
           text?: string | null
           title?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sources_course_fkey"
+            columns: ["course_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
       }
     }
     Views: {
