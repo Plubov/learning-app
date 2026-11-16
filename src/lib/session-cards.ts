@@ -23,7 +23,13 @@ export const SESSION_CARD_TYPES = ['recognition', 'production'];
 export type SessionCard = CardRow & {
   card_type: string;
   item_id: string;
-  item: { term: string; meaning: string; notes: string | null };
+  item: {
+    term: string;
+    meaning: string;
+    notes: string | null;
+    /** Language of the item's deck ('ko', ...); null for decks that are not a language. */
+    target_lang: string | null;
+  };
 };
 
 export type SessionCards = {
@@ -37,8 +43,11 @@ const CARD_COLUMNS =
   'learning_step, state, schedule_status, reps, lapses, last_review_at, suspended';
 
 type CardWithFlag = Omit<SessionCard, 'item'> & { suspended: boolean };
+/** An item as loaded: with its deck's id, from which target_lang is filled in. */
+type ItemText = { term: string; meaning: string; notes: string | null; deck_id: string };
+type ReviewRow = CardWithFlag & { item: ItemText };
 type ListeningRow = CardWithFlag & {
-  item: SessionCard['item'] & { cards: { card_type: string; state: number }[] };
+  item: ItemText & { cards: { card_type: string; state: number }[] };
 };
 type NewItemRow = {
   id: string;
@@ -63,19 +72,19 @@ export async function loadSessionCards(extraNew: number): Promise<SessionCards> 
     // Due cards of words that have been introduced (seen at least once).
     supabase
       .from('cards')
-      .select(`${CARD_COLUMNS}, item:items!inner(term, meaning, notes)`)
+      .select(`${CARD_COLUMNS}, item:items!inner(term, meaning, notes, deck_id)`)
       .not('item.introduced_at', 'is', null)
       .eq('suspended', false)
       .in('card_type', SESSION_CARD_TYPES)
       .lte('due_at', now.toISOString())
       .order('due_at')
       .limit(MAX_REVIEW_CARDS)
-      .overrideTypes<(SessionCard & { suspended: boolean })[], { merge: false }>(),
+      .overrideTypes<ReviewRow[], { merge: false }>(),
     // Due listening cards of introduced words, with the states of their
     // siblings to check whether the recognition card has graduated.
     supabase
       .from('cards')
-      .select(`${CARD_COLUMNS}, item:items!inner(term, meaning, notes, cards(card_type, state))`)
+      .select(`${CARD_COLUMNS}, item:items!inner(term, meaning, notes, deck_id, cards(card_type, state))`)
       .not('item.introduced_at', 'is', null)
       .eq('suspended', false)
       .eq('card_type', 'listening')
@@ -83,7 +92,7 @@ export async function loadSessionCards(extraNew: number): Promise<SessionCards> 
       .order('due_at')
       .limit(MAX_REVIEW_CARDS)
       .overrideTypes<ListeningRow[], { merge: false }>(),
-    supabase.from('decks').select('id, new_per_day'),
+    supabase.from('decks').select('id, new_per_day, target_lang'),
     // Words introduced today, per deck, for the daily limit.
     supabase
       .from('items')
@@ -111,24 +120,33 @@ export async function loadSessionCards(extraNew: number): Promise<SessionCards> 
     todayCount[deck_id] = (todayCount[deck_id] ?? 0) + 1;
   }
   const allowance: Record<string, number> = {};
+  const language: Record<string, string | null> = {};
+  const withLanguage = ({ deck_id, ...text }: ItemText): SessionCard['item'] => ({
+    ...text,
+    target_lang: language[deck_id] ?? null,
+  });
   for (const deck of decks.data ?? []) {
+    language[deck.id] = deck.target_lang;
     allowance[deck.id] = newItemAllowance(deck.new_per_day, todayCount[deck.id] ?? 0, extraNew);
   }
 
   const picked = pickNewItems(newItems.data ?? [], allowance);
-  const newCards: SessionCard[] = picked.flatMap(({ term, meaning, notes, cards }) =>
+  const newCards: SessionCard[] = picked.flatMap(({ deck_id, term, meaning, notes, cards }) =>
     cards
       .filter((c) => !c.suspended && SESSION_CARD_TYPES.includes(c.card_type))
-      .map(({ suspended: _suspended, ...card }) => ({ ...card, item: { term, meaning, notes } })),
+      .map(({ suspended: _suspended, ...card }) => ({
+        ...card,
+        item: withLanguage({ deck_id, term, meaning, notes }),
+      })),
   );
   const reviewCards: SessionCard[] = (reviews.data ?? []).map(
-    ({ suspended: _suspended, ...card }) => card,
+    ({ suspended: _suspended, item, ...card }) => ({ ...card, item: withLanguage(item) }),
   );
   for (const { suspended: _suspended, item, ...card } of listening.data ?? []) {
     const recognition = item.cards.find((c) => c.card_type === 'recognition');
     if (isListeningUnlocked(card.state, recognition?.state)) {
       const { cards: _siblings, ...itemText } = item;
-      reviewCards.push({ ...card, item: itemText });
+      reviewCards.push({ ...card, item: withLanguage(itemText) });
     }
   }
   // Reviews and unlocked listening cards together, most overdue first.

@@ -6,6 +6,7 @@ import { Button } from '@/components/button';
 import { GoalCelebration } from '@/components/goal-celebration';
 import { Screen } from '@/components/screen';
 import { KoreanTextField } from '@/components/korean-text-field';
+import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -86,9 +87,12 @@ export default function ReviewScreen() {
   const koreanShown =
     current !== undefined && (current.card_type !== 'production' || revealed !== null);
   const currentTerm = current?.item.term;
+  // Reading aloud and the Korean keyboard are for Korean decks only; cards
+  // of other decks (e.g. a course on another subject) are plain text.
+  const currentIsKorean = current?.item.target_lang === 'ko';
   useEffect(() => {
-    if (autoplay && koreanShown && currentTerm) speakKorean(currentTerm);
-  }, [autoplay, koreanShown, currentTerm, shownAt]);
+    if (autoplay && koreanShown && currentTerm && currentIsKorean) speakKorean(currentTerm);
+  }, [autoplay, koreanShown, currentTerm, currentIsKorean, shownAt]);
 
   function toggleAutoplay() {
     const next = !autoplay;
@@ -185,8 +189,10 @@ export default function ReviewScreen() {
     </Pressable>
   );
 
+  const isKorean = card.item.target_lang === 'ko';
+  const AnswerField = isKorean ? KoreanTextField : TextField;
   let instruction = 'What does it mean?';
-  if (isProduction) instruction = 'Type it in Korean';
+  if (isProduction) instruction = isKorean ? 'Type it in Korean' : 'Type the term';
   if (isListening) instruction = 'Type what you hear';
 
   function reveal() {
@@ -261,7 +267,7 @@ export default function ReviewScreen() {
               {isProduction ? card.item.meaning : card.item.term}
             </ThemedText>
           )}
-          {card.card_type === 'recognition' && listenButton(false)}
+          {card.card_type === 'recognition' && isKorean && listenButton(false)}
 
           {revealed && (
             <>
@@ -270,7 +276,7 @@ export default function ReviewScreen() {
                 {isProduction || isListening ? card.item.term : card.item.meaning}
               </ThemedText>
               {isListening && <ThemedText style={styles.meaning}>{card.item.meaning}</ThemedText>}
-              {isProduction && listenButton(false)}
+              {isProduction && isKorean && listenButton(false)}
               {revealed.typed && (
                 <ThemedText
                   style={{ color: revealed.typed.correct ? theme.tint : theme.danger }}>
@@ -291,9 +297,9 @@ export default function ReviewScreen() {
         {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
         {!revealed && typesAnswer && (
-          <KoreanTextField
+          <AnswerField
             key={card.id} // a fresh, focused input for every card
-            placeholder="한국어"
+            placeholder={isKorean ? '한국어' : 'Your answer'}
             value={answer}
             onChangeText={setAnswer}
             onSubmitEditing={reveal}
