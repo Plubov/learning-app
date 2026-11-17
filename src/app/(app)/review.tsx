@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -14,7 +14,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { loadGoalStatus } from '@/lib/daily-goal';
 import { getDeviceId } from '@/lib/device-id';
 import { examSettings } from '@/lib/exam';
-import { isDueInSession } from '@/lib/review-session';
+import { isDueInSession, withoutListening } from '@/lib/review-session';
 import {
   createScheduler,
   formatInterval,
@@ -69,6 +69,11 @@ export default function ReviewScreen() {
   const [loadNumber, setLoadNumber] = useState(0); // increased to reload the queue
   const [moreNewAvailable, setMoreNewAvailable] = useState(false);
   const [celebration, setCelebration] = useState<Celebration | null>(null);
+  // "Can't listen right now": listening cards taken out of this session.
+  // Nothing is recorded for them, so they stay due for the next session.
+  const [skippedListening, setSkippedListening] = useState<SessionCard[]>([]);
+  // Read by the loading effect, so "Learn more" also leaves them out.
+  const skipListeningRef = useRef(false);
   // Stable function, so the running animation is not restarted on re-render.
   const endCelebration = useCallback(() => setCelebration(null), []);
 
@@ -126,7 +131,13 @@ export default function ReviewScreen() {
         if (!active) return;
         setScheduler(newScheduler);
         setExamSchedulers(forExams);
-        setQueue(session.cards);
+        if (skipListeningRef.current) {
+          const { kept, skipped } = withoutListening(session.cards);
+          setQueue(kept);
+          setSkippedListening((before) => addCards(before, skipped));
+        } else {
+          setQueue(session.cards);
+        }
         setMoreNewAvailable(session.moreNewAvailable);
         setShownAt(new Date().getTime());
       },
@@ -146,6 +157,28 @@ export default function ReviewScreen() {
     // far today (the ones just learned already count as introduced).
     setExtraNew(STUDY_MORE_COUNT);
     setLoadNumber((n) => n + 1);
+  }
+
+  /** Takes every listening card out of this session (see skippedListening). */
+  function skipListening() {
+    if (!queue) return;
+    stopSpeaking();
+    skipListeningRef.current = true;
+    const { kept, skipped } = withoutListening(queue);
+    setSkippedListening(addCards(skippedListening, skipped));
+    setQueue(kept);
+    setRevealed(null);
+    setAnswer('');
+    setError(null);
+    setShownAt(new Date().getTime());
+  }
+
+  /** Puts the skipped listening cards back, at the end of this session. */
+  function listenAfterAll() {
+    skipListeningRef.current = false;
+    setQueue([...(queue ?? []), ...skippedListening]);
+    setSkippedListening([]);
+    setShownAt(new Date().getTime());
   }
 
   if (error && !queue) {
@@ -180,6 +213,20 @@ export default function ReviewScreen() {
               : `You reviewed ${doneCount} cards and earned ⭐ ${points} points.`}
             {moreNewAvailable && ' Today’s new words are done.'}
           </ThemedText>
+          {skippedListening.length > 0 && (
+            <>
+              <ThemedText themeColor="textSecondary">
+                {skippedListening.length === 1
+                  ? '1 listening card is saved for your next session.'
+                  : `${skippedListening.length} listening cards are saved for your next session.`}
+              </ThemedText>
+              <Button
+                title="I can listen now"
+                variant="secondary"
+                onPress={listenAfterAll}
+              />
+            </>
+          )}
           {moreNewAvailable && (
             <Button title={`Learn ${STUDY_MORE_COUNT} more new words`} onPress={studyMore} />
           )}
@@ -338,6 +385,9 @@ export default function ReviewScreen() {
         {!revealed && (
           <Button title={typesAnswer ? 'Check' : 'Show answer'} onPress={reveal} />
         )}
+        {!revealed && isListening && (
+          <Button title="Can’t listen right now" variant="secondary" onPress={skipListening} />
+        )}
 
         {revealed && (
           <View style={styles.ratings}>
@@ -366,6 +416,12 @@ export default function ReviewScreen() {
       {overlay}
     </View>
   );
+}
+
+/** `before` plus the cards of `more` that are not in it yet. */
+function addCards(before: SessionCard[], more: SessionCard[]): SessionCard[] {
+  const known = new Set(before.map((c) => c.id));
+  return [...before, ...more.filter((c) => !known.has(c.id))];
 }
 
 const styles = StyleSheet.create({

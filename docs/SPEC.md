@@ -57,6 +57,10 @@ Card types:
   per device, first guessed from the browser language.
   Phones and tablets use their own Korean keyboard.
 - Listening: Korean spoken by device text-to-speech, recall the meaning.
+  "Can't listen right now" on a listening card takes all listening cards out
+  of the current session without recording anything, so they stay due and
+  come back in the next session ("I can listen now" at the end of the
+  session brings them back).
 
 Exercise types:
 - Cloze: sentence with one word or ending blanked out.

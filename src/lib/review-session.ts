@@ -30,6 +30,19 @@ export function spreadSiblings<T extends { item_id: string }>(cards: readonly T[
   return result;
 }
 
+/**
+ * Splits off the listening cards, for "Can't listen right now". Nothing is
+ * recorded for them, so they stay due and come back in the next session.
+ */
+export function withoutListening<T extends { card_type: string }>(
+  cards: readonly T[],
+): { kept: T[]; skipped: T[] } {
+  return {
+    kept: cards.filter((c) => c.card_type !== 'listening'),
+    skipped: cards.filter((c) => c.card_type === 'listening'),
+  };
+}
+
 /** Local midnight of the given moment: "today" for the daily new-word limit. */
 export function startOfLocalDay(now: Date): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());

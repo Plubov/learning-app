@@ -8,6 +8,7 @@ import {
   pickNewItems,
   spreadSiblings,
   startOfLocalDay,
+  withoutListening,
 } from '@/lib/review-session';
 
 const card = (id: string, item_id: string) => ({ id, item_id });
@@ -127,5 +128,24 @@ describe('isListeningUnlocked', () => {
 
   test('without a recognition card a new listening card stays locked', () => {
     expect(isListeningUnlocked(CARD_STATE.new, undefined)).toBe(false);
+  });
+});
+
+describe('withoutListening', () => {
+  it('takes out the listening cards and keeps the order of the rest', () => {
+    const cards = [
+      { id: 'a', card_type: 'recognition' },
+      { id: 'b', card_type: 'listening' },
+      { id: 'c', card_type: 'production' },
+      { id: 'd', card_type: 'listening' },
+    ];
+    const { kept, skipped } = withoutListening(cards);
+    expect(ids(kept)).toEqual(['a', 'c']);
+    expect(ids(skipped)).toEqual(['b', 'd']);
+  });
+
+  it('changes nothing when there are no listening cards', () => {
+    const cards = [{ id: 'a', card_type: 'recognition' }];
+    expect(withoutListening(cards)).toEqual({ kept: cards, skipped: [] });
   });
 });
