@@ -74,6 +74,11 @@ guidance (always read the versioned Expo docs, not memory).
 - Type check: `npx tsc --noEmit`
 - Lint: `npx expo lint`
 - Check dependency versions: `npx expo-doctor`
+- Publish the web version: `npm run deploy:web` (builds into `dist/` with
+  the values from `.env` and deploys to EAS Hosting as production,
+  https://learning-app-plubub.expo.app; Expo project `@plubub/learning-app`,
+  needs `npx eas-cli@latest login` once per machine). New sign-ups are
+  switched off in Supabase Auth, because the address is public.
 - Run unit tests: `npm test` (Jest with jest-expo; once) or `npm run test:watch`.
   Test files are `*-test.ts` in `__tests__` folders next to the code, never
   inside `src/app/` (every file there becomes a screen)

@@ -33,11 +33,19 @@
           "imageWidth": 76
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-web-browser",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c383d346-0225-4fdd-b2ba-bf87589370a8"
+      }
+    },
+    "owner": "plubub"
   }
 }
