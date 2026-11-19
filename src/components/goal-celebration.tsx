@@ -16,14 +16,18 @@ type Props = {
   /** The streak including today; null while it is still loading. */
   streak: number | null;
   onDone: () => void;
+  /** Other celebrations (focus timer): their own icon and texts instead of the daily goal's. */
+  icon?: string;
+  title?: string;
+  detail?: string;
 };
 
 /**
  * Shown over the review screen when an answer reaches the daily goal:
  * the flame pops in, the phone vibrates briefly, then it fades away.
- * Tapping closes it early.
+ * Tapping closes it early. The focus timer uses it with its own texts.
  */
-export function GoalCelebration({ streak, onDone }: Props) {
+export function GoalCelebration({ streak, onDone, icon = '🔥', title, detail }: Props) {
   // Created once per celebration; the animation changes them, React never does.
   const [opacity] = useState(() => new Animated.Value(0));
   const [scale] = useState(() => new Animated.Value(0.4));
@@ -52,14 +56,14 @@ export function GoalCelebration({ streak, onDone }: Props) {
         style={styles.fill}
         onPress={onDone}
         accessibilityRole="button"
-        accessibilityLabel="Daily goal reached. Close">
+        accessibilityLabel={`${title ?? 'Daily goal reached'}. Close`}>
         <ThemedView type="backgroundElement" style={styles.box}>
-          <Animated.Text style={[styles.flame, { transform: [{ scale }] }]}>🔥</Animated.Text>
+          <Animated.Text style={[styles.flame, { transform: [{ scale }] }]}>{icon}</Animated.Text>
           <ThemedText type="subtitle" style={styles.center}>
-            Daily goal reached!
+            {title ?? 'Daily goal reached!'}
           </ThemedText>
           <ThemedText style={styles.center} themeColor="textSecondary">
-            {streak === null ? ' ' : streakLabel(streak)}
+            {detail ?? (streak === null ? ' ' : streakLabel(streak))}
           </ThemedText>
         </ThemedView>
       </Pressable>

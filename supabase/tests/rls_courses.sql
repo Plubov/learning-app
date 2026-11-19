@@ -1,5 +1,5 @@
 -- Row Level Security and function checks for courses, lessons, the tutor
--- chat, ai_usage and quiz answers.
+-- chat, ai_usage, quiz answers and focus time.
 -- Run: npx supabase db query --remote -f supabase/tests/rls_courses.sql
 -- Everything happens inside one transaction that is rolled back at the end,
 -- so no test data remains. Any failed check aborts with "FAIL: ...".
@@ -32,6 +32,8 @@ begin
   insert into public.course_messages (user_id, course_id, role, content)
   values (a, c, 'user', 'message of A');
   insert into public.ai_usage (user_id, task, model, ok) values (a, 'chat', 'test-model', true);
+  insert into public.focus_time (user_id, course_id, started_at, ended_at)
+  values (a, c, now() - interval '10 minutes', now());
 end $$;
 
 -- From here on act exactly like the app does for logged-in user B.
@@ -72,6 +74,10 @@ begin
   if n <> 0 then raise exception 'FAIL: B can see the message of A'; end if;
   select count(*) into n from public.ai_usage;
   if n <> 0 then raise exception 'FAIL: B can see the AI usage of A'; end if;
+  select count(*) into n from public.focus_time;
+  if n <> 0 then raise exception 'FAIL: B can see the focus time of A'; end if;
+  select count(*) into n from public.focus_totals('UTC', current_date);
+  if n <> 0 then raise exception 'FAIL: focus_totals shows B the time of A'; end if;
 
   -- user_id is filled in automatically; rows in the name of A are refused.
   insert into public.courses (goal) values ('Understand Newtonian mechanics')
@@ -215,6 +221,51 @@ begin
   select count(*) into n from public.review_events where lesson_id = l1;
   if n <> 3 then raise exception 'FAIL: re-planning lost quiz answers'; end if;
 
+  -- Focus time: a project is a course of kind 'project'; time is booked on
+  -- it, counted by focus_totals, and cannot be changed or deleted.
+  insert into public.courses (goal, title, kind, weekly_minutes) values ('Work', 'Work', 'project', 600)
+  returning id into owner;  -- reused as the project's id
+  insert into public.focus_time (course_id, started_at, ended_at)
+  values (owner, now() - interval '30 minutes', now() - interval '5 minutes'),
+         (c, now() - interval '2 minutes', now() - interval '1 minute');
+  if (select week_ms from public.focus_totals('Europe/Berlin', (now() at time zone 'Europe/Berlin')::date)
+      where course_id = owner) <> 1500000
+     or (select today_ms from public.focus_totals('Europe/Berlin', (now() at time zone 'Europe/Berlin')::date)
+         where course_id = c) <> 60000 then
+    raise exception 'FAIL: focus_totals counts the time wrongly';
+  end if;
+  begin
+    insert into public.focus_time (course_id, started_at, ended_at)
+    values (current_setting('test.course_a')::uuid, now() - interval '1 minute', now());
+    raise exception 'FAIL: B booked time on the course of A';
+  exception when foreign_key_violation then null;
+  end;
+  begin
+    insert into public.focus_time (course_id, started_at, ended_at)
+    values (owner, now() - interval '7 hours', now());
+    raise exception 'FAIL: a stretch of more than 6 hours was accepted';
+  exception when check_violation then null;
+  end;
+  begin
+    update public.focus_time set ended_at = now() + interval '1 hour';
+    raise exception 'FAIL: focus_time could be updated';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.focus_time;
+    raise exception 'FAIL: focus_time could be deleted';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.courses set focus_links = '{"url": "x"}' where id = owner;
+    raise exception 'FAIL: focus_links accepted something that is not a list';
+  exception when check_violation then null;
+  end;
+  -- Deleting the project deletes its time.
+  delete from public.courses where id = owner;
+  select count(*) into n from public.focus_time;
+  if n <> 1 then raise exception 'FAIL: deleting a project left % rows of focus time', n - 1; end if;
+
   -- Chat messages can be added but not edited.
   insert into public.course_messages (course_id, role, content) values (c, 'user', 'original');
   update public.course_messages set content = 'edited';
@@ -238,6 +289,16 @@ begin
   if n <> 0 then raise exception 'FAIL: anon can see % chat messages', n; end if;
   select count(*) into n from public.ai_usage;
   if n <> 0 then raise exception 'FAIL: anon can see % rows of AI usage', n; end if;
+  begin
+    select count(*) into n from public.focus_time;
+    if n <> 0 then raise exception 'FAIL: anon can see % rows of focus time', n; end if;
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.focus_totals('UTC', current_date);
+    raise exception 'FAIL: anon can call focus_totals';
+  exception when insufficient_privilege then null;
+  end;
   begin
     perform public.save_course_plan(gen_random_uuid(), '{}', 'x');
     raise exception 'FAIL: anon can call save_course_plan';

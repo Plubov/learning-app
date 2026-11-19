@@ -133,7 +133,7 @@ A goal turned into a plan. See "Courses" in SPEC.md.
 
 | column | type | note |
 |---|---|---|
-| kind | text | 'guided' (default) or 'study': a university course with uploaded material and homework |
+| kind | text | 'guided' (default), 'study' (a university course with uploaded material and homework) or 'project' (only a name, e.g. "Work", for the focus timer: no plan, lessons or deck; `goal` and `title` hold the name) |
 | goal | text | what the learner typed (max 2000 characters) |
 | level | text null | what they already know |
 | weeks | int null | wanted duration; null = the planner decides |
@@ -145,6 +145,23 @@ A goal turned into a plan. See "Courses" in SPEC.md.
 | scheduled | boolean | default true; false = no week schedule, lessons in order at the learner's pace |
 | planned_at | timestamptz null | null = no plan yet |
 | plan_model | text null | model that wrote the current plan |
+| weekly_minutes | int null | focus timer: minutes per week the learner wants to work on it (15 to 10080); null = no goal |
+| focus_links | jsonb | focus timer: allowed links, `[{"label", "url"}]`, at most 20; opening one from the timer keeps it running |
+
+### focus_time (append-only)
+One stretch of uninterrupted work on a course or project, measured by the
+focus timer: `course_id`, `started_at`, `ended_at` (device time, at most 6
+hours apart), `device_id`. The app writes a row when the timer stops
+counting (pause, finish, leaving the screen or the app) and every minute
+while it counts, so closing the app loses at most a minute. Read and insert
+only, like `review_events`; rows disappear only with their project (cascade)
+or the account.
+
+`focus_totals(time_zone, today)` returns per course the time this week
+(Monday to `today`) and today, counted in the device's time zone. Today's
+goal is not stored: it is computed in the app (`src/lib/focus.ts`) as what
+was open of the weekly goal at the start of today, divided by the days left
+in the week.
 
 ### lessons
 

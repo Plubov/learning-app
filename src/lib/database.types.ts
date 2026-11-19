@@ -166,6 +166,7 @@ export type Database = {
         Row: {
           created_at: string
           deck_id: string | null
+          focus_links: Json
           goal: string
           id: string
           kind: string
@@ -180,11 +181,13 @@ export type Database = {
           title: string | null
           updated_at: string
           user_id: string
+          weekly_minutes: number | null
           weeks: number | null
         }
         Insert: {
           created_at?: string
           deck_id?: string | null
+          focus_links?: Json
           goal: string
           id?: string
           kind?: string
@@ -199,11 +202,13 @@ export type Database = {
           title?: string | null
           updated_at?: string
           user_id?: string
+          weekly_minutes?: number | null
           weeks?: number | null
         }
         Update: {
           created_at?: string
           deck_id?: string | null
+          focus_links?: Json
           goal?: string
           id?: string
           kind?: string
@@ -218,6 +223,7 @@ export type Database = {
           title?: string | null
           updated_at?: string
           user_id?: string
+          weekly_minutes?: number | null
           weeks?: number | null
         }
         Relationships: [
@@ -326,6 +332,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      focus_time: {
+        Row: {
+          course_id: string
+          created_at: string
+          device_id: string | null
+          ended_at: string
+          id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          device_id?: string | null
+          ended_at: string
+          id?: string
+          started_at: string
+          user_id?: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          device_id?: string | null
+          ended_at?: string
+          id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_time_course_id_user_id_fkey"
+            columns: ["course_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
       }
       homework: {
         Row: {
@@ -713,6 +757,14 @@ export type Database = {
           p_rating: number
         }
         Returns: number
+      }
+      focus_totals: {
+        Args: { p_time_zone: string; p_today: string }
+        Returns: {
+          course_id: string
+          today_ms: number
+          week_ms: number
+        }[]
       }
       import_items: {
         Args: {
