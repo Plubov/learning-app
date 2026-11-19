@@ -1,13 +1,16 @@
 import { Stack } from 'expo-router';
 
-/** Layout for every screen that needs a logged-in user. */
+/**
+ * Layout for every screen that needs a logged-in user. The tabs (Today,
+ * Courses, Focus, Stats) are the bottom of the stack; every other screen is pushed above
+ * them and covers the tab bar.
+ */
 export default function AppLayout() {
-  // Titles of dynamic screens (deck, course, lesson) are set inside the screens.
+  // Titles of dynamic screens (deck, course, lesson, project) are set inside the screens.
   return (
     <Stack>
-      <Stack.Screen name="index" options={{ title: 'Learn' }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="review" options={{ title: 'Review' }} />
-      <Stack.Screen name="stats" options={{ title: 'Statistics' }} />
       <Stack.Screen name="voices" options={{ title: '' }} />
       <Stack.Screen name="decks/new" options={{ title: 'New deck' }} />
       <Stack.Screen name="decks/[deckId]/index" options={{ title: '' }} />
@@ -22,6 +25,10 @@ export default function AppLayout() {
       <Stack.Screen name="courses/[courseId]/homework/new" options={{ title: 'Check a solution' }} />
       <Stack.Screen name="courses/[courseId]/homework/[homeworkId]" options={{ title: 'Result' }} />
       <Stack.Screen name="courses/[courseId]/lessons/[lessonId]" options={{ title: '' }} />
+      <Stack.Screen name="projects/new" options={{ title: '' }} />
+      <Stack.Screen name="projects/[courseId]" options={{ title: '' }} />
+      {/* The running timer is a full-screen session, like a lesson. */}
+      <Stack.Screen name="timer/[courseId]" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -145,12 +145,21 @@ A lesson has two marks: learned (the guided run was finished once) and done
 (the first finished practice session). The next lesson of a course is the
 first one in order that is not done.
 
-The home screen greets the learner with their total points and streak, then
-shows today's goal (points and reviews, each with a progress bar) and the
-next step: a large card for the course worked on most recently, naming the
-next lesson, with a button that opens that lesson directly. Below it:
-today's reviews, the other courses (each with its own next-lesson button),
-and the word decks.
+The app has four tabs at the bottom:
+
+- Today greets the learner with their total points and streak, then shows
+  today's goal (points and reviews, each with a progress bar), the next
+  step (a large card for the course worked on most recently, naming the next
+  lesson, with a button that opens that lesson directly) and today's
+  reviews.
+- Courses lists every course with its progress and next-lesson button, and
+  the word decks with their switches.
+- Focus is the study timer (see "Focus timer").
+- Stats has the statistics and the daily goals, and the settings at the
+  bottom (voices, language, signed-in account, sign out).
+
+Every other screen (a course, a lesson, the review session, the timer)
+opens above the tabs and covers the tab bar.
 
 The course screen shows the course as a path: every lesson is a round stop
 on a winding trail, every stage a signpost, the goal at the end. Finished
@@ -322,6 +331,37 @@ changed on the home screen (decks) or the course screen:
 One deck can be studied on its own, whether active or paused: from its
 course screen ("Flashcards"), from the deck screen, and from the home
 screen once the daily goal is reached.
+
+## Focus timer
+
+The "Focus" tab tracks
+the time the learner works on their courses and on plain projects.
+
+- Projects. Every course is also a project for the timer. A plain project is
+  only a name ("Work", "Thesis"), created in the Focus tab; it has no plan,
+  lessons or cards and does not appear in the Courses tab.
+  A plain project can be renamed and deleted (with its time).
+- Goals. Each course or project can have a weekly goal (30-minute steps).
+  Today's goal follows from it: what was still open of the week at the start
+  of today, divided by the days left (today included). Weeks start on
+  Monday. The screens show what was achieved against the goals ("Today
+  40 min of 1 h", "This week 3 h 10 of 7 h"), never what is still missing.
+- Timer. "Work now" opens a full-screen session that counts up. It counts
+  only while the timer screen is on view and the app is in front; leaving
+  the screen or the app (on the web: another tab or another program in
+  front) pauses it, and coming back continues it, with a note how long the
+  learner was away. Pause and Finish are buttons; Finish ends with a short
+  summary and confetti.
+- Allowed links. Each course or project can have a list of sites needed
+  while working (e.g. a dictionary). Opening one from the timer keeps it
+  counting until the learner is back. The app cannot see or block other
+  sites or apps, so this works on trust; a browser extension with a real
+  block list would be a separate project.
+- Celebrations. Every 25 minutes of a session (small), and when today's or
+  the week's goal is reached (big, with confetti and sound).
+
+Time from lessons, practice and reviews inside the app is not counted by
+the timer; only time with the timer running counts.
 
 ## Language
 

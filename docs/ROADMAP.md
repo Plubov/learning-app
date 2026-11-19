@@ -102,6 +102,10 @@ Project:
       celebration when it is reached
 - [x] Points per answer by kind of exercise; total and today's points on
       the home screen; a daily points goal as a second way to complete the day
+- [x] Tabs: Today, Courses, Focus, Stats (settings under Stats)
+- [x] Focus timer: plain projects, weekly goal per
+      course or project, timer that pauses when the learner leaves, allowed
+      links, celebrations
 - [ ] Development build (EAS) and push reminder notifications
 - [ ] More AI connections: OpenRouter, OpenAI-compatible endpoint
 

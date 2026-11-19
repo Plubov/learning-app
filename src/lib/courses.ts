@@ -261,6 +261,8 @@ export async function loadHomeCourses(): Promise<HomeCourse[]> {
     .select(
       'id, title, goal, planned_at, created_at, deck_id, lessons(id, position, title, prepared_at, learned_at, completed_at)',
     )
+    // Plain projects (only a name, for the focus timer) live in the Focus tab.
+    .neq('kind', 'project')
     .order('created_at', { ascending: false })
     .overrideTypes<
       {
