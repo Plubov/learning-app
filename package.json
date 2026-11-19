@@ -56,7 +56,8 @@
     "lint": "expo lint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "db:types": "supabase gen types --remote --schema public > src/lib/database.types.ts"
+    "db:types": "supabase gen types --remote --schema public > src/lib/database.types.ts",
+    "deploy:web": "expo export --platform web --clear && npx eas-cli@latest deploy --prod"
   },
   "jest": {
     "preset": "jest-expo"
