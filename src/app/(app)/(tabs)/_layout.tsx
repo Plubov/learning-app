@@ -10,8 +10,9 @@ function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
 }
 
 /**
- * The two main areas of the app, switched with the bar at the bottom:
- * Learn (courses, reviews, decks) and Focus (the study timer). Every other
+ * The main areas of the app, switched with the bar at the bottom: Today
+ * (next lesson, today's goal, reviews), Courses (courses and decks), Focus
+ * (the study timer) and Stats (statistics, goals and settings). Every other
  * screen is pushed above the tabs by the stack in (app)/_layout.tsx.
  */
 export default function TabsLayout() {
@@ -22,7 +23,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: t('tabs.learn'),
+          title: t('tabs.today'),
+          tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="courses"
+        options={{
+          title: t('tabs.courses'),
           tabBarIcon: ({ focused }) => <TabIcon emoji="📚" focused={focused} />,
         }}
       />
@@ -31,6 +39,13 @@ export default function TabsLayout() {
         options={{
           title: t('tabs.focus'),
           tabBarIcon: ({ focused }) => <TabIcon emoji="⏱️" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: t('tabs.stats'),
+          tabBarIcon: ({ focused }) => <TabIcon emoji="📊" focused={focused} />,
         }}
       />
     </Tabs>

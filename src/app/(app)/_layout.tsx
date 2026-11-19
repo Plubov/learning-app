@@ -1,8 +1,8 @@
 import { Stack } from 'expo-router';
 
 /**
- * Layout for every screen that needs a logged-in user. The tabs (Learn,
- * Focus) are the bottom of the stack; every other screen is pushed above
+ * Layout for every screen that needs a logged-in user. The tabs (Today,
+ * Courses, Focus, Stats) are the bottom of the stack; every other screen is pushed above
  * them and covers the tab bar.
  */
 export default function AppLayout() {
@@ -11,7 +11,6 @@ export default function AppLayout() {
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="review" options={{ title: 'Review' }} />
-      <Stack.Screen name="stats" options={{ title: 'Statistics' }} />
       <Stack.Screen name="voices" options={{ title: '' }} />
       <Stack.Screen name="decks/new" options={{ title: 'New deck' }} />
       <Stack.Screen name="decks/[deckId]/index" options={{ title: '' }} />

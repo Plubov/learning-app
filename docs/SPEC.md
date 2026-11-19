@@ -145,12 +145,21 @@ A lesson has two marks: learned (the guided run was finished once) and done
 (the first finished practice session). The next lesson of a course is the
 first one in order that is not done.
 
-The home screen greets the learner with their total points and streak, then
-shows today's goal (points and reviews, each with a progress bar) and the
-next step: a large card for the course worked on most recently, naming the
-next lesson, with a button that opens that lesson directly. Below it:
-today's reviews, the other courses (each with its own next-lesson button),
-and the word decks.
+The app has four tabs at the bottom:
+
+- Today greets the learner with their total points and streak, then shows
+  today's goal (points and reviews, each with a progress bar), the next
+  step (a large card for the course worked on most recently, naming the next
+  lesson, with a button that opens that lesson directly) and today's
+  reviews.
+- Courses lists every course with its progress and next-lesson button, and
+  the word decks with their switches.
+- Focus is the study timer (see "Focus timer").
+- Stats has the statistics and the daily goals, and the settings at the
+  bottom (voices, language, signed-in account, sign out).
+
+Every other screen (a course, a lesson, the review session, the timer)
+opens above the tabs and covers the tab bar.
 
 The course screen shows the course as a path: every lesson is a round stop
 on a winding trail, every stage a signpost, the goal at the end. Finished
@@ -325,12 +334,12 @@ screen once the daily goal is reached.
 
 ## Focus timer
 
-A second tab, "Focus", next to "Learn" (the former home screen). It tracks
+The "Focus" tab tracks
 the time the learner works on their courses and on plain projects.
 
 - Projects. Every course is also a project for the timer. A plain project is
   only a name ("Work", "Thesis"), created in the Focus tab; it has no plan,
-  lessons or cards and does not appear among the courses on the Learn tab.
+  lessons or cards and does not appear in the Courses tab.
   A plain project can be renamed and deleted (with its time).
 - Goals. Each course or project can have a weekly goal (30-minute steps).
   Today's goal follows from it: what was still open of the week at the start
