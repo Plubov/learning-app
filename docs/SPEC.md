@@ -145,21 +145,29 @@ A lesson has two marks: learned (the guided run was finished once) and done
 (the first finished practice session). The next lesson of a course is the
 first one in order that is not done.
 
-The app has four tabs at the bottom:
+The app has four tabs at the bottom, from left to right; it opens on Home:
 
-- Today greets the learner with their total points and streak, then shows
-  today's goal (points and reviews, each with a progress bar), the next
-  step (a large card for the course worked on most recently, naming the next
-  lesson, with a button that opens that lesson directly) and today's
-  reviews.
-- Courses lists every course with its progress and next-lesson button, and
-  the word decks with their switches.
+- Stats has the statistics and the daily goals.
+- Home is for getting started quickly. It greets the learner with their
+  total points and streak, then shows today's flashcard reviews (violet) and
+  below them the next step: a large card for the course worked on most
+  recently, naming the next lesson, with a button that opens that lesson
+  directly.
+- Courses & decks (labelled "Courses" in the tab bar) lists every course
+  with its progress and next-lesson button, and the word decks with their
+  switches.
 - Focus is the study timer (see "Focus timer").
-- Stats has the statistics and the daily goals, and the settings at the
-  bottom (voices, language, signed-in account, sign out).
 
-Every other screen (a course, a lesson, the review session, the timer)
-opens above the tabs and covers the tab bar.
+Every tab has the same header: a menu button (three lines) at the top left
+that opens the settings (app language, voices, account and sign-out), the
+tab's title, and below them today's goal as a slim bar (points and reviews;
+the bar fills with whichever is further along; tapping it opens Stats). The
+header stays in place while the tab scrolls.
+
+Flashcards are colour coded violet wherever they are offered.
+
+Every other screen (a course, a lesson, the review session, the timer, the
+settings) opens above the tabs and covers the tab bar.
 
 The course screen shows the course as a path: every lesson is a round stop
 on a winding trail, every stage a signpost, the goal at the end. Finished
@@ -315,7 +323,7 @@ model, and deleting a course's files when the course is deleted.
 ## Focus: active decks, priority, exams
 
 Every deck (a course's cards are in its deck) has three study settings,
-changed on the home screen (decks) or the course screen:
+changed in the "Courses & decks" tab or on the course screen:
 
 - Active or paused. The daily session and the daily goal draw from all
   active decks together. A paused deck keeps its cards and their schedule.
@@ -366,11 +374,12 @@ the timer; only time with the timer running counts.
 ## Language
 
 The app can be shown in English, German, Spanish and Korean; the choice is
-on the home screen and stored on the device (the device's language is used
+in the settings and stored on the device (the device's language is used
 until one is chosen). The app's language is sent with every AI request, and
 everything the AI writes is in it, except text in a language being learned.
 Texts are in `src/lib/i18n/`; `en.ts` is the list of all keys. Translated so
-far: home, course, lesson, and the learn and practice sessions. Still in
+far: home, the tabs, settings, focus timer, course, lesson, and the learn
+and practice sessions. Still in
 English: review, statistics, decks, import, sign-in, tutor chat, material
 and homework screens, and error messages.
 

@@ -3,7 +3,6 @@ import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -15,7 +14,6 @@ import { loadHomeCourses } from '@/lib/courses';
 import { loadGoalStatus, syncTimeZone } from '@/lib/daily-goal';
 import { useT } from '@/lib/i18n';
 import { loadSessionCards } from '@/lib/session-cards';
-import { goalProgress } from '@/lib/streak';
 import { supabase } from '@/lib/supabase';
 
 /** Wraps a loader that throws into the {data, error} form useFocusQuery expects. */
@@ -27,20 +25,18 @@ function settled<T>(promise: Promise<T>) {
 }
 
 /**
- * The Today tab, in the order the learner needs it:
+ * Home tab: only what is needed to get going quickly.
  *   1. greeting, total points and streak
- *   2. today's goal: points and reviews, either of which keeps the streak
- *   3. the next lesson of the course worked on last, with a button straight
- *      into it
- *   4. today's reviews
- * All courses and decks are in the Courses tab; statistics and settings in
- * the Stats tab.
+ *   2. today's flashcard reviews (violet, the colour of flashcards)
+ *   3. the next lesson of the course worked on last, one tap away
+ * Today's goal is in the bar at the top of every tab (goal-bar.tsx); all
+ * courses and decks are in the "Courses & decks" tab.
  */
-export default function TodayScreen() {
+export default function HomeScreen() {
   const theme = useTheme();
   const { t } = useT();
 
-  // Decks to go on with once the day's goal is reached.
+  // Only for "keep going with one deck" once the day's goal is reached.
   const loadDecks = useCallback(
     () =>
       supabase
@@ -89,48 +85,64 @@ export default function TodayScreen() {
           <Link href="/stats" asChild>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${t('home.totalPoints', { n: goal.totalPoints })}. ${goal.streak}-day streak. Statistics`}
+              accessibilityLabel={`${t('home.totalPoints', { n: goal.totalPoints })}. ${goal.streak}-day streak. ${t('tabs.stats')}`}
               style={styles.badges}>
-              <ThemedView type="backgroundElement" style={styles.streak}>
-                <ThemedText style={styles.streakText}>⭐ {goal.totalPoints}</ThemedText>
+              <ThemedView type="backgroundElement" style={styles.badge}>
+                <ThemedText style={styles.badgeText}>⭐ {goal.totalPoints}</ThemedText>
               </ThemedView>
-              <ThemedView type="backgroundElement" style={styles.streak}>
-                <ThemedText style={styles.streakText}>🔥 {goal.streak}</ThemedText>
+              <ThemedView type="backgroundElement" style={styles.badge}>
+                <ThemedText style={styles.badgeText}>🔥 {goal.streak}</ThemedText>
               </ThemedView>
             </Pressable>
           </Link>
         )}
       </View>
 
-      {goal && (
-        <ThemedView type="backgroundElement" style={styles.card}>
-          <View style={styles.spread}>
-            <ThemedText style={styles.cardTitle}>{t('home.today.title')}</ThemedText>
-            {goal.metToday && (
-              <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                {t('home.review.goalReached')}
-              </ThemedText>
-            )}
-          </View>
-          <ThemedText type="smallBold">
-            {t('home.today.points', { done: goal.todayPoints, goal: goal.pointsGoal })}
-          </ThemedText>
-          <ProgressBar value={goalProgress(goal.todayPoints, goal.pointsGoal)} />
-          <ThemedText type="smallBold">
-            {t('home.today.reviews', { done: goal.todayReviews, goal: goal.goal })}
-          </ThemedText>
-          <ProgressBar value={goalProgress(goal.todayReviews, goal.goal)} />
-          {!goal.metToday && (
-            <ThemedText type="small" themeColor="textSecondary">
-              {t('home.today.hint')}
-            </ThemedText>
-          )}
-        </ThemedView>
-      )}
-
       {(error ?? coursesError) && (
         <ThemedText style={{ color: theme.danger }}>{error ?? coursesError}</ThemedText>
       )}
+
+      <ThemedView type="flashcardsSoft" style={styles.card}>
+        <ThemedText style={[styles.cardTitle, { color: theme.flashcards }]}>
+          {t('home.review.title')}
+        </ThemedText>
+        <ThemedText themeColor="textSecondary">
+          {dueCount > 0 ? t('home.review.due') : t('home.review.none')}
+        </ThemedText>
+        <Button
+          title={reviewTitle}
+          tone="flashcards"
+          onPress={() => router.push('/review')}
+          disabled={!canReview}
+        />
+        {goal?.metToday && decks && decks.length > 0 && (
+          // The day's goal is reached (by reviews of all active decks
+          // together, or by points); the learner picks what to go on with.
+          <>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('home.keepGoing')}
+            </ThemedText>
+            <View style={styles.chips}>
+              {decks.map((deck) => (
+                <Pressable
+                  key={deck.id}
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: '/review', params: { deckId: deck.id } })}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    { borderColor: theme.flashcards, backgroundColor: theme.background },
+                    pressed && styles.pressed,
+                  ]}>
+                  <ThemedText type="small" numberOfLines={1}>
+                    {deck.priority ? '⭐ ' : ''}
+                    {deck.name}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
+      </ThemedView>
 
       {current?.next && (
         <View style={[styles.hero, { backgroundColor: theme.hero }]}>
@@ -172,52 +184,10 @@ export default function TodayScreen() {
       {courses?.length === 0 && (
         <ThemedView type="tintSoft" style={styles.card}>
           <ThemedText style={styles.cardTitle}>{t('home.firstCourse.title')}</ThemedText>
-          <ThemedText themeColor="textSecondary">
-            {t('home.firstCourse.text')}
-          </ThemedText>
+          <ThemedText themeColor="textSecondary">{t('home.firstCourse.text')}</ThemedText>
           <Button title={t('home.firstCourse.button')} onPress={() => router.push('/courses/new')} />
         </ThemedView>
       )}
-
-      <ThemedView type="backgroundElement" style={styles.card}>
-        <ThemedText style={styles.cardTitle}>{t('home.review.title')}</ThemedText>
-        <ThemedText themeColor="textSecondary">
-          {dueCount > 0 ? t('home.review.due') : t('home.review.none')}
-        </ThemedText>
-        <Button
-          title={reviewTitle}
-          variant={current ? 'secondary' : 'primary'}
-          onPress={() => router.push('/review')}
-          disabled={!canReview}
-        />
-        {goal?.metToday && decks && decks.length > 0 && (
-          // The day's goal is reached (by reviews of all active decks
-          // together, or by points); the learner picks what to go on with.
-          <>
-            <ThemedText type="small" themeColor="textSecondary">
-              {t('home.keepGoing')}
-            </ThemedText>
-            <View style={styles.chips}>
-              {decks.map((deck) => (
-                <Pressable
-                  key={deck.id}
-                  accessibilityRole="button"
-                  onPress={() => router.push({ pathname: '/review', params: { deckId: deck.id } })}
-                  style={({ pressed }) => [
-                    styles.chip,
-                    { borderColor: theme.tint, backgroundColor: theme.tintSoft },
-                    pressed && styles.pressed,
-                  ]}>
-                  <ThemedText type="small" numberOfLines={1}>
-                    {deck.priority ? '⭐ ' : ''}
-                    {deck.name}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        )}
-      </ThemedView>
 
     </Screen>
   );
@@ -231,8 +201,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   greeting: { fontSize: 28, lineHeight: 36, fontWeight: 700 },
   badges: { flexDirection: 'row', gap: Spacing.two },
-  streak: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: 999 },
-  streakText: { fontSize: 18, lineHeight: 26, fontWeight: 700 },
+  badge: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three, borderRadius: 999 },
+  badgeText: { fontSize: 18, lineHeight: 26, fontWeight: 700 },
 
   hero: { padding: Spacing.four, borderRadius: Spacing.four, gap: Spacing.two },
   onTint: { color: '#ffffff' },
@@ -252,6 +222,7 @@ const styles = StyleSheet.create({
 
   card: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.two },
   cardTitle: { fontSize: 18, lineHeight: 26, fontWeight: 700 },
+
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   chip: {
     maxWidth: '100%',

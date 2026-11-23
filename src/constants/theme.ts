@@ -21,6 +21,9 @@ export const Colors = {
     dangerSoft: '#FDE8E8',
     success: '#2A9D46',
     successSoft: '#E2F6E6',
+    // Flashcards are colour coded violet wherever they are offered.
+    flashcards: '#7C3AED',
+    flashcardsSoft: '#F1EAFE',
     border: '#D9D9E0',
   },
   dark: {
@@ -36,6 +39,8 @@ export const Colors = {
     dangerSoft: '#3B1D1F',
     success: '#4CC764',
     successSoft: '#17331D',
+    flashcards: '#9F7AEA',
+    flashcardsSoft: '#251A3D',
     border: '#3A3F42',
   },
 } as const;

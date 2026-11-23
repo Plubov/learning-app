@@ -1,15 +1,19 @@
 import { Stack } from 'expo-router';
 
+import { useT } from '@/lib/i18n';
+
 /**
- * Layout for every screen that needs a logged-in user. The tabs (Today,
- * Courses, Focus, Stats) are the bottom of the stack; every other screen is pushed above
- * them and covers the tab bar.
+ * Layout for every screen that needs a logged-in user. The tabs (Stats,
+ * Home, Courses & decks, Focus) are the bottom of the stack; every other
+ * screen is pushed above them and covers the tab bar.
  */
 export default function AppLayout() {
+  const { t } = useT();
   // Titles of dynamic screens (deck, course, lesson, project) are set inside the screens.
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ title: t('settings.title') }} />
       <Stack.Screen name="review" options={{ title: 'Review' }} />
       <Stack.Screen name="voices" options={{ title: '' }} />
       <Stack.Screen name="decks/new" options={{ title: 'New deck' }} />

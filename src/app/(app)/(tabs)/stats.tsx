@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
-import { SettingsSection } from '@/components/settings-section';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -64,7 +63,6 @@ export default function StatsScreen() {
     return (
       <Screen>
         <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>
-        <SettingsSection />
       </Screen>
     );
   }
@@ -144,7 +142,6 @@ export default function StatsScreen() {
         have passed the learning steps.
       </ThemedText>
 
-      <SettingsSection />
     </Screen>
   );
 }
