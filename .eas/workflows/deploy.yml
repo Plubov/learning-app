@@ -1,0 +1,24 @@
+# Publishes the web version to EAS Hosting (production,
+# https://learning-app-plubub.expo.app) on every push to main, i.e. whenever
+# a pull request is merged. Runs on Expo's servers, not on GitHub.
+#
+# Needs, set up once on expo.dev:
+# - the GitHub repository connected to the Expo project (project > GitHub)
+# - EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in the
+#   project's "production" environment variables (visibility: plain text;
+#   both end up in the public web bundle anyway)
+#
+# Run it by hand: npx eas-cli@latest workflow:run .eas/workflows/deploy.yml
+name: Deploy web
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  deploy:
+    type: deploy
+    name: Deploy web
+    environment: production
+    params:
+      prod: true
