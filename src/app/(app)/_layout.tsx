@@ -29,6 +29,8 @@ export default function AppLayout() {
       <Stack.Screen name="courses/[courseId]/homework/new" options={{ title: t('title.checkSolution') }} />
       <Stack.Screen name="courses/[courseId]/homework/[homeworkId]" options={{ title: t('title.result') }} />
       <Stack.Screen name="courses/[courseId]/lessons/[lessonId]" options={{ title: '' }} />
+      {/* A review stop is a full-screen session, like a lesson's. */}
+      <Stack.Screen name="courses/[courseId]/review/[lessonId]" options={{ headerShown: false }} />
       <Stack.Screen name="projects/new" options={{ title: '' }} />
       <Stack.Screen name="projects/[courseId]" options={{ title: '' }} />
       {/* The running timer is a full-screen session, like a lesson. */}

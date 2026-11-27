@@ -173,14 +173,17 @@ in the week.
 | week | int | timeline: week of the course, from 1; not shown when the course is not scheduled |
 | title, summary | text | |
 | objectives | jsonb | list of strings |
-| explanation | jsonb null | `{"lang", "steps": [{"title", "parts": [{"text", "target"}], "example": {"text", "note"} or null}], "key_points": [...]}`; written once. Each step is one card of the introduction: a headline, the idea in one sentence (`parts`) and one example with its translation or what it shows (`note`). `lang` is the language of the text, `target` marks text in the language being learned (for reading aloud). Older lessons have steps with `parts` only (longer, spoken-style text), and lessons prepared before 2026-11-16 have `{"intro", "key_points"}`; the app shows all three |
+| explanation | jsonb null | `{"lang", "steps": [{"title", "parts": [{"text", "target"}], "example": {"text", "note"} or null}], "key_points": [...]}`; written once. Each step is one card of the introduction: a headline, the idea in one sentence (`parts`) and one example with its translation or what it shows (`note`). `lang` is the language of the text, `target` marks text in the language being learned (for reading aloud). Older lessons have steps with `parts` only (longer, spoken-style text), and lessons prepared before 2026-11-16 have `{"intro", "key_points"}`; the app shows all three. Lessons prepared from 2026-11-27 also have `drills`: questions as in `practice`, each naming its item by `term` instead of `item_id` (the items have no ids yet when the content is written) |
 | prepared_at | timestamptz null | null = not started, no items yet |
 | learned_at | timestamptz null | first time the guided run ("Learn") was finished |
 | material_refs | jsonb null | study courses: the sections of the material this lesson is written from, `[{"source", "index"}]` |
 | material_at | timestamptz null | when those sections were chosen; material read later makes the choice stale |
-| practice | jsonb null | latest practice: `{"questions": [{"item_id", "kind": "choice", "typed" or "build", "prompt", "options", "answer", "explanation"}]}`; for "build", `answer` is the sentence and `options` the extra wrong words. Practice written before 2026-11-16 also has `examples`, which the app no longer shows |
+| practice | jsonb null | latest practice: `{"questions": [{"item_id", "kind": "choice", "typed", "build" or "cloze", "prompt", "options", "answer", "translation", "explanation"}]}`; for "build", `answer` is the sentence and `options` the extra wrong words; for "cloze", `prompt` has one gap `___`, `answer` fills it and `translation` is the whole sentence in the learner's language. `translation` is missing in practice written before 2026-11-27. Practice written before 2026-11-16 also has `examples`, which the app no longer shows |
 | practice_at | timestamptz null | |
 | completed_at | timestamptz null | first finished practice session |
+| review_completed_at | timestamptz null | first finished review of the review stop after this lesson (every third lesson has one; see `src/lib/review-stops.ts`) |
+| conversation | jsonb null | latest conversation (language courses): `{"scenario", "partner", "turns": [{"item_id", "partner", "partner_translation", "answers", "hint"}]}`; `partner` and `answers` are in the language being learned, the rest in the learner's |
+| conversation_at | timestamptz null | when the conversation was written |
 
 The jsonb shapes and their validators are defined once, in
 `supabase/functions/_shared/course-schemas.ts`, used by the Edge Function
@@ -241,8 +244,9 @@ What an answer is worth is decided by the database function
 `event_points(card_type, exercise, rating, correct)` and nowhere else: card
 reviews not rated "again" earn 5 (recognition, listening) or 10
 (production); a listening review with `correct` set is from when listening
-cards were typed and keeps its 10. Correct practice answers earn 2 (match, per pair), 5 (choice,
-listen), 10 (typed) or 15 (build).
+cards were typed and keeps its 10. Correct practice answers (also those of
+a lesson's guided run) earn 2 (match, per pair), 5 (choice, listen), 10
+(typed, cloze, talk) or 15 (build).
 
 The statistics screen reads its numbers from the database function
 `review_stats` (time zone, card types, number of days). It only reads and

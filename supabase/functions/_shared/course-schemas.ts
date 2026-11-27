@@ -56,46 +56,96 @@ export type LessonStep = {
   example?: { text: string; note: string } | null;
 };
 
+/**
+ * choice: pick one option. typed: type a word or phrase. build: put word
+ * tiles in order to translate a sentence, in either direction (language
+ * courses). cloze: a sentence with one gap ("___"), filled by picking one of
+ * the options.
+ */
+export type QuestionKind = 'choice' | 'typed' | 'build' | 'cloze';
+export const QUESTION_KINDS: readonly QuestionKind[] = ['choice', 'typed', 'build', 'cloze'];
+/** The kinds a lesson's own exercises (drills) may have: no typing right after meeting a word. */
+export const DRILL_KINDS: readonly QuestionKind[] = ['choice', 'build', 'cloze'];
+
+/** A question as the model writes it: it points at an item by list position. */
+export type Question = {
+  item: number;
+  kind: QuestionKind;
+  /** For 'cloze' a sentence with exactly one gap, written "___". */
+  prompt: string;
+  /**
+   * 3 or 4 options for 'choice', 2 to 4 for 'cloze' (the answer among them);
+   * empty for 'typed'; extra wrong words for 'build'.
+   */
+  options: string[];
+  answer: string;
+  /**
+   * The sentence in the learner's language: for 'cloze' the whole sentence,
+   * for 'choice' a prompt in the language being learned; '' otherwise.
+   * Missing in questions written before 2026-11-27.
+   */
+  translation?: string;
+  explanation: string;
+};
+
+/** Practice as the model writes it. */
+export type Practice = { questions: Question[] };
+
+/** Practice as stored on the lesson: questions carry the item's id. */
+export type StoredPractice = {
+  questions: (Omit<Question, 'item'> & { item_id: string })[];
+};
+
+/** A lesson's own exercise as stored: it names its item by the term (items get ids only when saved). */
+export type LessonDrill = Omit<Question, 'item'> & { term: string };
+
 export type LessonContent = {
   /** ISO 639-1 code of the language the explanation is written in (the learner's). */
   lang: string;
   steps: LessonStep[];
   key_points: string[];
   items: { kind: ItemKind; term: string; meaning: string; notes: string }[];
+  /** Sentence exercises done in the lesson right after its items. */
+  drills: Question[];
 };
 
 /**
  * The part of LessonContent kept on the lesson row (items become rows of
  * their own). Lessons prepared before the introduction was split into steps
  * have one text, `intro`, instead; src/lib/lesson-flow.ts reads both.
+ * Lessons prepared before 2026-11-27 have no drills.
  */
 export type LessonExplanation =
-  | Pick<LessonContent, 'lang' | 'steps' | 'key_points'>
+  | (Pick<LessonContent, 'lang' | 'steps' | 'key_points'> & { drills?: LessonDrill[] })
   | { intro: string; key_points: string[] };
 
 /**
- * choice: pick one option. typed: type a word or phrase. build: put the
- * words of a sentence in order (language courses).
+ * A simulated conversation for one lesson of a language course: in every
+ * turn the partner says one line and the learner answers, by speaking or
+ * typing. The app checks the answer against `answers` itself.
  */
-export type QuestionKind = 'choice' | 'typed' | 'build';
-export const QUESTION_KINDS: readonly QuestionKind[] = ['choice', 'typed', 'build'];
-
-/** Practice as the model writes it: questions point at items by list position. */
-export type Practice = {
-  questions: {
+export type Conversation = {
+  /** The situation, in the learner's language ("You order a coffee at a café."). */
+  scenario: string;
+  /** Who the learner talks to, in the learner's language ("Barista"). */
+  partner: string;
+  turns: {
+    /** The item the learner's answer mainly uses (list position). */
     item: number;
-    kind: QuestionKind;
-    prompt: string;
-    /** 3 or 4 options for 'choice'; empty for 'typed'; extra wrong words for 'build'. */
-    options: string[];
-    answer: string;
-    explanation: string;
+    /** What the partner says, in the language being learned. */
+    partner: string;
+    /** The same in the learner's language. */
+    partner_translation: string;
+    /** 1 to 3 short answers that fit, in the language being learned; the first is the model answer. */
+    answers: string[];
+    /** What to answer, in the learner's language, without the words themselves. */
+    hint: string;
   }[];
 };
 
-/** Practice as stored on the lesson: questions carry the item's id. */
-export type StoredPractice = {
-  questions: (Omit<Practice['questions'][number], 'item'> & { item_id: string })[];
+/** A conversation as stored on the lesson: turns carry the item's id. */
+export type StoredConversation = Omit<Conversation, 'turns'> & {
+  turns: (Omit<Conversation['turns'][number], 'item'> & { item_id: string })[];
 };
 
 export type TutorReply = {
@@ -197,6 +247,10 @@ export const LIMITS = {
   /** Characters of a card's example, and of the note under it. */
   stepExample: 200,
   questions: 10,
+  /** A lesson's own sentence exercises. */
+  drills: 8,
+  /** Turns of a conversation. */
+  turns: 8,
   term: 120,
 } as const;
 
@@ -233,6 +287,16 @@ export const COURSE_PLAN_SCHEMA = object({
   },
 });
 
+const QUESTION_SCHEMA = object({
+  item: { type: 'integer' },
+  kind: { type: 'string', enum: QUESTION_KINDS },
+  prompt: text,
+  options: textList,
+  answer: text,
+  translation: text,
+  explanation: text,
+});
+
 export const LESSON_CONTENT_SCHEMA = object({
   lang: text,
   steps: {
@@ -253,18 +317,24 @@ export const LESSON_CONTENT_SCHEMA = object({
       notes: text,
     }),
   },
+  drills: { type: 'array', items: QUESTION_SCHEMA },
 });
 
 export const PRACTICE_SCHEMA = object({
-  questions: {
+  questions: { type: 'array', items: QUESTION_SCHEMA },
+});
+
+export const CONVERSATION_SCHEMA = object({
+  scenario: text,
+  partner: text,
+  turns: {
     type: 'array',
     items: object({
       item: { type: 'integer' },
-      kind: { type: 'string', enum: QUESTION_KINDS },
-      prompt: text,
-      options: textList,
-      answer: text,
-      explanation: text,
+      partner: text,
+      partner_translation: text,
+      answers: textList,
+      hint: text,
     }),
   },
 });
@@ -462,6 +532,10 @@ export function validateLessonContent(
       steps,
       key_points: strings(content.key_points, 'key_points', 1, 8, 500),
       items,
+      // Optional for the model: a lesson without drills gets them from its examples.
+      drills: list(content.drills ?? [], 'drills', 0, LIMITS.drills).map((entry, i) =>
+        validateQuestion(entry, `drills[${i}]`, items.length, subject, DRILL_KINDS),
+      ),
     };
   });
 }
@@ -469,6 +543,75 @@ export function validateLessonContent(
 /** A word as compared when a sentence is built from tiles: no punctuation, lower case. */
 export function wordKey(word: string): string {
   return word.normalize('NFC').replace(/[.,!?;:"'。、！？]/g, '').toLowerCase();
+}
+
+/** A gap in a cloze sentence: three or more underscores. */
+const GAP = /_{3,}/g;
+
+/** Options to pick from: `min` to `max`, none twice, the answer among them. */
+function pickOptions(value: unknown, where: string, min: number, max: number, answer: string): string[] {
+  const options = strings(value, where, min, max, 300);
+  if (new Set(options).size !== options.length) throw new Invalid(`${where} repeats an option`);
+  if (!options.includes(answer)) throw new Invalid(`${where.replace(/options$/, 'answer')} is not one of its options`);
+  return options;
+}
+
+/**
+ * One question of practice or of a lesson's drills.
+ * @param itemCount number of items the question may point at (0 … itemCount-1)
+ * @param kinds the kinds allowed here
+ */
+function validateQuestion(
+  entry: unknown,
+  where: string,
+  itemCount: number,
+  subject: Subject,
+  kinds: readonly QuestionKind[],
+): Question {
+  const question = record(entry, where);
+  const kind = oneOf<QuestionKind>(question.kind, `${where}.kind`, kinds);
+  const answer = str(question.answer, `${where}.answer`, kind === 'typed' ? LIMITS.term : 300);
+  let prompt = str(question.prompt, `${where}.prompt`, 600);
+  let options: string[] = [];
+  if (kind === 'build') {
+    if (subject !== 'language') {
+      throw new Invalid(`${where}.kind "build" is only for language courses`);
+    }
+    const words = answer.split(/\s+/).map(wordKey);
+    if (words.length < 2 || words.length > 10) {
+      throw new Invalid(`${where}.answer must be a sentence of 2 to 10 words`);
+    }
+    const extra = strings(question.options, `${where}.options`, 0, 5, 40);
+    if (extra.some((word) => /\s/.test(word))) {
+      throw new Invalid(`${where}.options must be single words`);
+    }
+    // A wrong word that is also in the sentence would make two orders right.
+    options = [...new Set(extra)].filter((word) => !words.includes(wordKey(word)));
+  }
+  if (kind === 'choice') {
+    options = pickOptions(question.options, `${where}.options`, 3, 4, answer);
+  }
+  if (kind === 'cloze') {
+    const gaps = prompt.match(GAP) ?? [];
+    if (gaps.length !== 1) {
+      throw new Invalid(`${where}.prompt must have exactly one gap written ___ (it has ${gaps.length})`);
+    }
+    if (answer.length > 60 || /_{3,}/.test(answer)) {
+      throw new Invalid(`${where}.answer must be the short text of the gap`);
+    }
+    // One way of writing the gap, so the app can find it.
+    prompt = prompt.replace(GAP, '___');
+    options = pickOptions(question.options, `${where}.options`, 2, 4, answer);
+  }
+  return {
+    item: int(question.item, `${where}.item`, 0, itemCount - 1),
+    kind,
+    prompt,
+    options,
+    answer,
+    translation: str(question.translation ?? '', `${where}.translation`, 600, true),
+    explanation: str(question.explanation, `${where}.explanation`, 600, true),
+  };
 }
 
 /** @param itemCount number of items the questions may point at (0 … itemCount-1). */
@@ -479,46 +622,35 @@ export function validatePractice(
 ): Validated<Practice> {
   return run(() => {
     const practice = record(value, 'practice');
-    const questions = list(practice.questions, 'questions', 1, LIMITS.questions).map((entry, i) => {
-      const where = `questions[${i}]`;
-      const question = record(entry, where);
-      const kind = oneOf<QuestionKind>(question.kind, `${where}.kind`, QUESTION_KINDS);
-      const answer = str(question.answer, `${where}.answer`, kind === 'typed' ? LIMITS.term : 300);
-      let options: string[] = [];
-      if (kind === 'build') {
-        if (subject !== 'language') {
-          throw new Invalid(`${where}.kind "build" is only for language courses`);
-        }
-        const words = answer.split(/\s+/).map(wordKey);
-        if (words.length < 2 || words.length > 10) {
-          throw new Invalid(`${where}.answer must be a sentence of 2 to 10 words`);
-        }
-        const extra = strings(question.options, `${where}.options`, 0, 5, 40);
-        if (extra.some((word) => /\s/.test(word))) {
-          throw new Invalid(`${where}.options must be single words`);
-        }
-        // A wrong word that is also in the sentence would make two orders right.
-        options = [...new Set(extra)].filter((word) => !words.includes(wordKey(word)));
-      }
-      if (kind === 'choice') {
-        options = strings(question.options, `${where}.options`, 3, 4, 300);
-        if (new Set(options).size !== options.length) {
-          throw new Invalid(`${where}.options repeats an option`);
-        }
-        if (!options.includes(answer)) {
-          throw new Invalid(`${where}.answer is not one of its options`);
-        }
-      }
+    const questions = list(practice.questions, 'questions', 1, LIMITS.questions).map((entry, i) =>
+      validateQuestion(entry, `questions[${i}]`, itemCount, subject, QUESTION_KINDS),
+    );
+    return { questions };
+  });
+}
+
+/** @param itemCount number of items the turns may point at (0 … itemCount-1). */
+export function validateConversation(value: unknown, itemCount: number): Validated<Conversation> {
+  return run(() => {
+    const conversation = record(value, 'conversation');
+    const turns = list(conversation.turns, 'turns', 3, LIMITS.turns).map((entry, i) => {
+      const where = `turns[${i}]`;
+      const turn = record(entry, where);
+      const answers = strings(turn.answers, `${where}.answers`, 1, 3, 150);
+      if (new Set(answers).size !== answers.length) throw new Invalid(`${where}.answers repeats an answer`);
       return {
-        item: int(question.item, `${where}.item`, 0, itemCount - 1),
-        kind,
-        prompt: str(question.prompt, `${where}.prompt`, 600),
-        options,
-        answer,
-        explanation: str(question.explanation, `${where}.explanation`, 600, true),
+        item: int(turn.item, `${where}.item`, 0, itemCount - 1),
+        partner: str(turn.partner, `${where}.partner`, 200),
+        partner_translation: str(turn.partner_translation, `${where}.partner_translation`, 300),
+        answers,
+        hint: str(turn.hint, `${where}.hint`, 200),
       };
     });
-    return { questions };
+    return {
+      scenario: str(conversation.scenario, 'scenario', 300),
+      partner: str(conversation.partner, 'partner', 60),
+      turns,
+    };
   });
 }
 

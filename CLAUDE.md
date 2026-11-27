@@ -32,7 +32,8 @@ works; do not add libraries or infrastructure without saying why.
    Functions. User-supplied keys are stored encrypted, never logged.
 4. App code never names a specific AI provider or model. It calls the
    internal AI interface in `src/lib/ai.ts` (`planCourse`, `prepareLesson`,
-   `generatePractice`, `askTutor`; later `generateItems`, `gradeAnswer`).
+   `generatePractice`, `prepareConversation`, `askTutor`; later
+   `generateItems`, `gradeAnswer`).
    On the server, tasks ask for a tier ('plan' or 'light'); provider
    adapters live behind `supabase/functions/ai/provider.ts`.
 5. AI output is validated against a schema before it is stored. Invalid output

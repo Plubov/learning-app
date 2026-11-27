@@ -1,4 +1,12 @@
-import { buildFlow, explanationSteps, speechForPage, type FlowItem } from '../lesson-flow';
+import type { Exercise } from '../exercises';
+import {
+  buildFlow,
+  drillsFromExamples,
+  explanationSteps,
+  speechForPage,
+  type FlowItem,
+  type FlowPage,
+} from '../lesson-flow';
 
 const items: FlowItem[] = [
   { id: '1', term: '물', meaning: 'water', notes: null },
@@ -48,14 +56,22 @@ describe('explanationSteps', () => {
   });
 });
 
-describe('buildFlow', () => {
-  const pages = buildFlow(explanation, items, fixed);
+/** The item an exercise is about (matching pairs are about several). */
+function itemOf(exercise: Exercise): string | null {
+  return exercise.kind === 'match' ? null : exercise.itemId;
+}
 
-  it('shows steps, then items in groups with a check for each, then the recap', () => {
+const exercises = (pages: FlowPage[]) =>
+  pages.flatMap((page) => (page.kind === 'exercise' ? [page.exercise] : []));
+
+describe('buildFlow', () => {
+  const pages = buildFlow(explanation, items, 'ko', fixed);
+
+  it('shows steps, then items in groups with an exercise for each, then the recap', () => {
     expect(pages.map((page) => page.kind)).toEqual([
       'step', 'step',
-      'item', 'item', 'check', 'check',
-      'item', 'check',
+      'item', 'item', 'exercise', 'exercise',
+      'item', 'exercise',
       'recap',
     ]);
   });
@@ -65,38 +81,94 @@ describe('buildFlow', () => {
     const checked: string[] = [];
     for (const page of pages) {
       if (page.kind === 'item') seen.add(page.item.id);
-      if (page.kind === 'check') {
-        expect(seen.has(page.item.id)).toBe(true);
-        checked.push(page.item.id);
+      if (page.kind === 'exercise') {
+        const id = itemOf(page.exercise);
+        expect(id !== null && seen.has(id)).toBe(true);
+        if (id) checked.push(id);
       }
     }
     expect(checked.sort()).toEqual(['1', '2', '3']);
   });
 
-  it('offers the right meaning among different wrong ones', () => {
-    for (const page of pages) {
-      if (page.kind !== 'check') continue;
-      expect(page.options).toContain(page.item.meaning);
-      expect(new Set(page.options).size).toBe(page.options.length);
-      expect(page.options).toHaveLength(3);
+  it('takes the kinds of check in turn: meaning, by ear, term', () => {
+    const checks = exercises(pages);
+    expect(checks.map((e) => e.kind)).toEqual(['choice', 'listen', 'choice']);
+    const [meaning, , term] = checks;
+    if (meaning.kind !== 'choice' || term.kind !== 'choice') throw new Error('expected choices');
+    expect(meaning.options).toContain(items.find((i) => i.term === meaning.prompt)?.meaning);
+    expect(term.options).toContain(items.find((i) => i.meaning === term.prompt)?.term);
+  });
+
+  it('offers the right answer among different wrong ones', () => {
+    for (const exercise of exercises(pages)) {
+      if (exercise.kind !== 'choice' && exercise.kind !== 'listen') continue;
+      expect(exercise.options).toContain(exercise.answer);
+      expect(new Set(exercise.options).size).toBe(exercise.options.length);
+      expect(exercise.options).toHaveLength(3);
     }
   });
 
+  it('never asks by ear outside language courses', () => {
+    const other = buildFlow(explanation, items, null, fixed);
+    expect(exercises(other).some((e) => e.kind === 'listen')).toBe(false);
+  });
+
   it('leaves out checks when there is nothing to choose between', () => {
-    const single = buildFlow(explanation, [items[0]], fixed);
+    const single = buildFlow(explanation, [items[0]], 'ko', fixed);
     expect(single.map((page) => page.kind)).toEqual(['step', 'step', 'item', 'recap']);
-    const sameMeaning = buildFlow(explanation, [items[0], { ...items[1], meaning: 'water' }], fixed);
-    expect(sameMeaning.some((page) => page.kind === 'check')).toBe(false);
+    const sameMeaning = buildFlow(explanation, [items[0], { ...items[1], meaning: 'water' }], 'ko', fixed);
+    expect(sameMeaning.some((page) => page.kind === 'exercise')).toBe(false);
   });
 
   it('has no recap without key points', () => {
-    const flow = buildFlow({ ...explanation, key_points: [] }, items, fixed);
-    expect(flow[flow.length - 1].kind).toBe('check');
+    const flow = buildFlow({ ...explanation, key_points: [] }, items, 'ko', fixed);
+    expect(flow[flow.length - 1].kind).toBe('exercise');
+  });
+
+  it('puts the lesson\'s drills after the checks, and skips one about an unknown term', () => {
+    const drill = { kind: 'cloze' as const, prompt: '___ 주세요.', options: ['물', '밥'], answer: '물', translation: 'Water, please.', explanation: '' };
+    const flow = buildFlow(
+      { ...explanation, drills: [{ ...drill, term: '물' }, { ...drill, term: '없음' }] },
+      items,
+      'ko',
+      fixed,
+    );
+    const last = exercises(flow).pop();
+    expect(exercises(flow)).toHaveLength(4);
+    expect(last?.kind).toBe('cloze');
+    expect(last && itemOf(last)).toBe('1');
+    expect(flow[flow.length - 1].kind).toBe('recap');
+  });
+});
+
+describe('drillsFromExamples', () => {
+  const steps = [
+    { parts: [{ text: 'x', target: false }], example: { text: '물 주세요.', note: 'Water, please.' } },
+    { parts: [{ text: 'x', target: false }], example: { text: '안녕하세요', note: 'Hello' } },
+    { parts: [{ text: 'x', target: false }], example: { text: '밥 먹어요.', note: '' } },
+  ];
+
+  it('builds a sentence from each translated example that contains an item', () => {
+    const drills = drillsFromExamples(steps, items, fixed);
+    expect(drills).toHaveLength(1);
+    const [drill] = drills;
+    expect(drill.kind === 'build' && drill.prompt).toBe('Water, please.');
+    expect(drill.kind === 'build' && drill.answer).toBe('물 주세요.');
+    expect(itemOf(drill)).toBe('1');
+  });
+
+  it('finds a grammar pattern without its leading mark', () => {
+    const drills = drillsFromExamples(
+      [{ parts: [{ text: 'x', target: false }], example: { text: '물이 좋아요', note: 'I like water' } }],
+      [{ id: 'g', term: '-요', meaning: 'polite ending', notes: null }],
+      fixed,
+    );
+    expect(drills.map(itemOf)).toEqual(['g']);
   });
 });
 
 describe('speechForPage', () => {
-  const pages = buildFlow(explanation, items, fixed);
+  const pages = buildFlow(explanation, items, 'ko', fixed);
 
   it('reads a step of a Korean course, each language in its own voice', () => {
     expect(speechForPage(pages[0], 'en', 'ko')).toEqual([{ text: 'Thirsty in Seoul?', lang: 'en' }]);

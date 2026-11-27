@@ -500,6 +500,8 @@ export type Database = {
       lessons: {
         Row: {
           completed_at: string | null
+          conversation: Json | null
+          conversation_at: string | null
           course_id: string
           created_at: string
           explanation: Json | null
@@ -512,6 +514,7 @@ export type Database = {
           practice: Json | null
           practice_at: string | null
           prepared_at: string | null
+          review_completed_at: string | null
           stage: number
           summary: string
           title: string
@@ -521,6 +524,8 @@ export type Database = {
         }
         Insert: {
           completed_at?: string | null
+          conversation?: Json | null
+          conversation_at?: string | null
           course_id: string
           created_at?: string
           explanation?: Json | null
@@ -533,6 +538,7 @@ export type Database = {
           practice?: Json | null
           practice_at?: string | null
           prepared_at?: string | null
+          review_completed_at?: string | null
           stage?: number
           summary: string
           title: string
@@ -542,6 +548,8 @@ export type Database = {
         }
         Update: {
           completed_at?: string | null
+          conversation?: Json | null
+          conversation_at?: string | null
           course_id?: string
           created_at?: string
           explanation?: Json | null
@@ -554,6 +562,7 @@ export type Database = {
           practice?: Json | null
           practice_at?: string | null
           prepared_at?: string | null
+          review_completed_at?: string | null
           stage?: number
           summary?: string
           title?: string

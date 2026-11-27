@@ -10,6 +10,7 @@
  *   plan_course        once per course, and again when the learner changes it
  *   prepare_lesson     once per lesson: explanation and items
  *   generate_practice  on demand: a quiz for the learner's level
+ *   prepare_conversation  on demand: a short dialogue to answer by speaking
  *   chat               one message to the tutor
  *   read_material      reads the next unread part of an uploaded file (photo,
  *                      scan, a few PDF pages) into text; called until all
@@ -25,6 +26,7 @@ import { withSupabase, type SupabaseContext } from '@supabase/server';
 
 import {
   APP_LANGUAGES,
+  CONVERSATION_SCHEMA,
   COURSE_PLAN_SCHEMA,
   HOMEWORK_CHECK_SCHEMA,
   LESSON_CONTENT_SCHEMA,
@@ -34,6 +36,7 @@ import {
   SECTION_CHOICE_SCHEMA,
   SUBJECTS,
   TUTOR_REPLY_SCHEMA,
+  validateConversation,
   validateCoursePlan,
   validateHomeworkCheck,
   validateLessonContent,
@@ -43,6 +46,8 @@ import {
   type AppLanguage,
   type HomeworkMode,
   type HomeworkResult,
+  type LessonDrill,
+  type StoredConversation,
   type StoredPractice,
   type Subject,
   type Validated,
@@ -56,6 +61,8 @@ import {
   type AiRequest,
 } from './provider.ts';
 import {
+  CONVERSATION_SYSTEM,
+  conversationUser,
   homeworkSystem,
   homeworkUser,
   inLanguage,
@@ -491,9 +498,14 @@ async function prepareLesson(ctx: Context, body: Body): Promise<void> {
     (value) => validateLessonContent(value, subject, existingTerms),
   );
 
+  // Items get their ids only when they are saved, so a drill names its item by the term.
+  const drills: LessonDrill[] = content.drills.map(({ item, ...drill }) => ({
+    ...drill,
+    term: content.items[item].term,
+  }));
   const saved = await ctx.supabase.rpc('save_lesson_content', {
     p_lesson_id: lesson.id,
-    p_explanation: { lang: content.lang, steps: content.steps, key_points: content.key_points },
+    p_explanation: { lang: content.lang, steps: content.steps, key_points: content.key_points, drills },
     p_items: content.items,
   });
   if (saved.error) throw new AiError(`Database error (lesson): ${saved.error.message}`, 500);
@@ -792,10 +804,61 @@ async function checkHomework(ctx: Context, body: Body): Promise<void> {
   if (saved.error) throw new AiError(`Database error (homework): ${saved.error.message}`, 500);
 }
 
+/**
+ * Writes a conversation for a lesson of a language course: a situation and
+ * a few turns, each a line of the partner and the answers that fit. Called
+ * when the learner opens the conversation, and again for a new one.
+ */
+async function prepareConversation(ctx: Context, body: Body): Promise<void> {
+  const { lesson, course, subject, targetLang } = await loadLesson(ctx, uuid(body.lessonId, 'lessonId'));
+  if (subject !== 'language' || targetLang === '') {
+    throw new AiError('Conversations are only for language courses', 409);
+  }
+  if (!lesson.prepared_at) throw new AiError('Start the lesson first', 409);
+  const items = must(
+    await ctx.supabase
+      .from('items')
+      .select('id, kind, term, meaning, notes')
+      .eq('lesson_id', lesson.id)
+      .order('term'),
+    'items',
+  ) as { id: string; kind: string; term: string; meaning: string; notes: string | null }[];
+  if (items.length === 0) throw new AiError('This lesson has no items to practise', 409);
+
+  const { value: conversation } = await runAi(
+    ctx,
+    'prepare_conversation',
+    {
+      tier: 'light',
+      system: inLanguage(CONVERSATION_SYSTEM, langOf(body)),
+      messages: [
+        {
+          role: 'user',
+          content: conversationUser({ courseTitle: course.title ?? '', lesson, targetLang, items }),
+        },
+      ],
+      schema: CONVERSATION_SCHEMA,
+      maxTokens: 4000,
+    },
+    (value) => validateConversation(value, items.length),
+  );
+
+  const stored: StoredConversation = {
+    ...conversation,
+    turns: conversation.turns.map(({ item, ...turn }) => ({ ...turn, item_id: items[item].id })),
+  };
+  const saved = await ctx.supabase
+    .from('lessons')
+    .update({ conversation: stored, conversation_at: new Date().toISOString() })
+    .eq('id', lesson.id);
+  if (saved.error) throw new AiError(`Database error (conversation): ${saved.error.message}`, 500);
+}
+
 const TASKS: Record<string, (ctx: Context, body: Body) => Promise<void>> = {
   plan_course: planCourse,
   prepare_lesson: prepareLesson,
   generate_practice: generatePractice,
+  prepare_conversation: prepareConversation,
   chat,
   read_material: readMaterial,
   check_homework: checkHomework,

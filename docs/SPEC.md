@@ -103,11 +103,18 @@ AI is used in three places, and only there:
 2. A lesson's content, once per lesson, with the small model, when the
    learner presses "Start lesson": an introduction of 3 to 5 cards (each one
    idea: a headline, one sentence and one example, to be taken in at a
-   glance; no running text), key points and 4 to 10 items. The items become cards and enter the normal daily reviews.
-3. Practice, on demand, with the small model: 5 to 8
-   questions (multiple choice, a typed answer, or, in language courses,
-   building a sentence from word tiles), chosen and graded in difficulty
-   from the learner's proficiency per item.
+   glance; no running text), key points, 4 to 10 items and 4 to 6 drills
+   (short sentence exercises with the new items, done at the end of the
+   guided run). The items become cards and enter the normal daily reviews.
+3. Practice, on demand, with the small model: 6 to 9 questions, chosen
+   and graded in difficulty from the learner's proficiency per item, and
+   written as sentences rather than single words. In a language course at
+   least two thirds are sentence building (word tiles, in both directions:
+   into the language being learned and back into the learner's language)
+   or gaps (a sentence with one gap and 3 or 4 candidates, with its
+   translation); multiple choice uses whole sentences too, and there is at
+   most one typed answer. Other courses use mostly gaps (a statement,
+   rule or formula with a gap) and multiple choice.
 
 Everything else is fixed code. A lesson is always the same template (goals,
 Learn, Practise, the lesson's items); the model only fills the slots.
@@ -117,13 +124,22 @@ The lesson page is a short overview. Learning and practising each open as a
 full-screen session that shows one page at a time, with a progress bar, a
 close button and a sound switch on top and the action at the bottom.
 
-The guided run shows one thing at a time: the introduction cards, then the
-new items in pairs, each pair followed by a quick check ("which one fits?",
-built in the app from the lesson's own items), and the key points as a
-recap. With "Auto sound" on, each page is read aloud by the device's
-text-to-speech, switching voice between the learner's language and the
-language being learned. The quick checks are a warm-up and are not stored;
-only practice answers and card reviews enter the learning record.
+The guided run is played like a game, one thing at a time: the
+introduction cards, then the new items in pairs, each pair followed by a
+quick exercise per item, built in the app from the lesson's own items.
+Its kind changes in turn: pick the meaning, pick the meaning only by ear
+(language courses), pick the term for a meaning. Then come the lesson's
+drills (sentence building and gaps; lessons prepared before drills
+existed get sentence building from the examples of their cards), the key
+points as a recap, and a result page with points, the best streak and
+confetti, from which practice starts directly. Exercises get the same
+feedback as in practice (sound, animation, "3 in a row"), and a combo
+counter shows answers right in a row. Every answer in the run is stored
+like a practice answer: it earns points, counts for the daily goal and
+for proficiency. With "Auto sound" on, each page is read aloud by the
+device's text-to-speech, switching voice between the learner's language
+and the language being learned; a prompt in the language being learned
+is read too, a translation never.
 
 A practice session opens with the lesson's items once more on one page
 (term and meaning; tap to hear), then goes straight to the exercises. The
@@ -149,6 +165,41 @@ average of its items. Rules: `src/lib/proficiency.ts`.
 A lesson has two marks: learned (the guided run was finished once) and done
 (the first finished practice session). The next lesson of a course is the
 first one in order that is not done.
+
+Review stops: after every third lesson the path has a review stop, which
+repeats everything learned so far (all lessons up to the stop). Its
+session is made without AI: the eight weakest items (by proficiency) get
+one exercise each, taken from the questions already written for their
+lessons (practice and drills; sentence building and gaps first), or made
+from the items when there is none (pick the meaning, by ear in language
+courses), plus one round of matching pairs. A stop can be done once its
+lessons are finished; until it is done it is the next step of the course
+(on the course screen, the home screen and the course list), before the
+next lesson, also when later lessons were done first. Its answers are
+stored like practice answers. Rules: `src/lib/review-stops.ts`.
+
+Conversations (language courses): the lesson page offers a conversation
+next to Learn and Practise. AI writes it once, on demand, with the small
+model (a fourth use, like practice): an everyday situation, who the
+learner talks to, and 4 to 6 turns, each with the partner's line, its
+translation, 1 to 3 short answers that fit and a hint in the learner's
+language. It is kept until the learner asks for a new one. In the
+session the partner's line is read aloud and shown (translation and hint
+on request); the learner answers by speaking or typing, and earlier turns
+stay on screen as chat bubbles. The app checks the answer itself
+(`src/lib/talk.ts`): spaces and punctuation are ignored, Korean is
+compared letter by letter (jamo), and an answer at least 75 % like one of
+the answers counts as right, so a misheard sound does not fail it. A wrong
+answer may be tried once more; "I don't know" shows the answer. Answers
+are stored like practice answers (exercise "talk", `response.type`
+"speech" or "text") and earn 10 points.
+
+Speech recognition: Expo has no module for it and Expo Go cannot load
+one, so speaking works in the web version, with the browser's own
+recognition (Chrome and Edge on computers and Android, Safari; it needs a
+connection, and the browser asks once for the microphone). In the phone
+app and in browsers without it, answers are typed. A development build
+with a recognition package would bring it to the phone app later.
 
 The app has four tabs at the bottom, from left to right; it opens on Home:
 
@@ -181,10 +232,11 @@ sign-out. Sessions keep a quick sound switch of their own; it changes
 the same setting.
 
 The course screen shows the course as a path: every lesson is a round stop
-on a winding trail, every stage a signpost, the goal at the end. Finished
-stops are green with one to three stars (from proficiency), the next one is
-larger and pulses. Above the path: progress, the button into the next
-lesson, and the course's tools.
+on a winding trail, after every third lesson a review stop (violet, 🔁),
+every stage a signpost, the goal at the end. Finished
+stops are green (lessons with one to three stars, from proficiency), the
+current one is larger and pulses. Above the path: progress, the button into
+the next step (a due review, or the next lesson), and the course's tools.
 
 A week schedule can be removed on the course screen without AI (the lessons
 and their order stay); adding one back goes through the tutor. The course screen
@@ -247,7 +299,8 @@ letting users pick their model needs no change to screens or prompts.
   and a wrong answer earns none. A matched pair 2; a multiple choice, a
   listening choice or a flashcard that is only looked at (recognition,
   listening) 5; a typed answer
-  (in practice or on a flashcard) 10; a sentence built from word tiles 15.
+  (in practice or on a flashcard), a filled gap and an answer in a
+  conversation 10; a sentence built from word tiles 15.
   A flashcard earns its points unless it is rated "Again". The values live
   in one place, the database function `event_points`.
 - Daily goal: two goals, and reaching either one completes the day: a
