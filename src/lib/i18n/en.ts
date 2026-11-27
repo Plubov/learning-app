@@ -182,6 +182,8 @@ export const en = {
   'tabs.stats': 'Stats',
   'settings.title': 'Settings',
   'settings.account': 'Account',
+  'voices.androidWebTitle': 'In Chrome on Android, the phone chooses the voice',
+  'voices.androidWeb': 'The browser offers one voice per language: the one set on the phone. To change it, open the phone\'s Settings → System → Languages → Text-to-speech output, tap the gear next to the speech engine (Speech Services by Google), then Install voice data → the language, and pick a voice. Then reload this page.',
   'talk.title': 'Conversation',
   'talk.sub': 'Answer out loud, like in a real conversation',
   'talk.writing': 'Writing a conversation for you…',

@@ -29,6 +29,14 @@ const SAMPLES: Record<string, string> = {
 
 const OTHER_NAMES: Record<string, string> = { ko: '한국어', en: 'English', de: 'Deutsch', es: 'Español' };
 
+/**
+ * The web app in a browser on Android (Chrome). Such a browser offers one
+ * voice per language, the one set in Android's text-to-speech settings, not
+ * the phone's single Google voices; the app in Expo Go gets all of them.
+ */
+const ANDROID_BROWSER =
+  Platform.OS === 'web' && typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+
 type LanguageVoices = {
   lang: string;
   voices: VoiceOption[];
@@ -109,6 +117,12 @@ export default function VoicesScreen() {
     <Screen>
       <Stack.Screen options={{ title: t('voices.title') }} />
       <ThemedText themeColor="textSecondary">{t('voices.intro')}</ThemedText>
+      {ANDROID_BROWSER && (
+        <ThemedView type="tintSoft" style={styles.note}>
+          <ThemedText type="smallBold">{t('voices.androidWebTitle')}</ThemedText>
+          <ThemedText type="small">{t('voices.androidWeb')}</ThemedText>
+        </ThemedView>
+      )}
       {groups === null && <ThemedText themeColor="textSecondary">{t('voices.loading')}</ThemedText>}
 
       {groups?.map((group) => (
@@ -122,7 +136,8 @@ export default function VoicesScreen() {
             </ThemedText>
           ) : (
             <>
-              {!group.voices.some((voice) => voice.natural) && (
+              {/* On Android the phone's settings decide; that is said at the top. */}
+              {!ANDROID_BROWSER && !group.voices.some((voice) => voice.natural) && (
                 <ThemedText type="small" themeColor="textSecondary">
                   {t(Platform.OS === 'web' ? 'voices.noNaturalWeb' : 'voices.noNaturalPhone')}
                 </ThemedText>
@@ -176,4 +191,5 @@ const styles = StyleSheet.create({
   },
   play: { fontSize: 16, lineHeight: 24 },
   badge: { fontWeight: 600 },
+  note: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.one },
 });
