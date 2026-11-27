@@ -22,9 +22,8 @@ function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return <Text style={[styles.icon, !focused && styles.faded]}>{emoji}</Text>;
 }
 
-/** The usual menu symbol: three lines, drawn so it looks the same on every device. */
-function MenuButton() {
-  const theme = useTheme();
+/** The gear at the top left of every tab: opens the settings (language, sound, voices, keyboard, account). */
+function SettingsButton() {
   const { t } = useT();
   return (
     <Pressable
@@ -32,18 +31,16 @@ function MenuButton() {
       accessibilityRole="button"
       accessibilityLabel={t('settings.title')}
       hitSlop={Spacing.two}
-      style={({ pressed }) => [styles.menu, pressed && styles.faded]}>
-      {[0, 1, 2].map((line) => (
-        <View key={line} style={[styles.menuLine, { backgroundColor: theme.text }]} />
-      ))}
+      style={({ pressed }) => pressed && styles.faded}>
+      <Text style={styles.gear}>⚙️</Text>
     </Pressable>
   );
 }
 
 /**
- * The header of every tab: menu button and title, and below them today's
- * goal. Being part of the header, the goal bar stays in place while the
- * tab's content scrolls.
+ * The header of every tab: settings button and title, and below them
+ * today's goal. Being part of the header, the goal bar stays in place while
+ * the tab's content scrolls.
  */
 function TabHeader({ title }: { title: string }) {
   const theme = useTheme();
@@ -51,7 +48,7 @@ function TabHeader({ title }: { title: string }) {
   return (
     <ThemedView style={[styles.header, { paddingTop: insets.top, borderBottomColor: theme.border }]}>
       <View style={styles.headerRow}>
-        <MenuButton />
+        <SettingsButton />
         <ThemedText style={styles.title} numberOfLines={1}>
           {title}
         </ThemedText>
@@ -122,6 +119,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two + Spacing.one,
   },
   title: { flex: 1, fontSize: 18, lineHeight: 26, fontWeight: 700 },
-  menu: { gap: 4, paddingVertical: Spacing.one },
-  menuLine: { width: 22, height: 2.5, borderRadius: 2 },
+  gear: { fontSize: 22, lineHeight: 28 },
 });

@@ -158,8 +158,8 @@ The app has four tabs at the bottom, from left to right; it opens on Home:
   switches.
 - Focus is the study timer (see "Focus timer").
 
-Every tab has the same header: a menu button (three lines) at the top left
-that opens the settings (app language, voices, account and sign-out), the
+Every tab has the same header: a settings button (gear) at the top left
+that opens the settings, the
 tab's title, and below them today's goal as a slim bar (points and reviews;
 the bar fills with whichever is further along; tapping it opens Stats). The
 header stays in place while the tab scrolls.
@@ -168,6 +168,12 @@ Flashcards are colour coded violet wherever they are offered.
 
 Every other screen (a course, a lesson, the review session, the timer, the
 settings) opens above the tabs and covers the tab bar.
+
+Settings hold every setting of the app in one place: app language,
+reading aloud automatically (with answer sounds), voices, the computer's
+keyboard layout for Korean typing (web only) and the account with
+sign-out. Sessions keep a quick sound switch of their own; it changes
+the same setting.
 
 The course screen shows the course as a path: every lesson is a round stop
 on a winding trail, every stage a signpost, the goal at the end. Finished
