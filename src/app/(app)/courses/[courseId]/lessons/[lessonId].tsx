@@ -5,8 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Button } from '@/components/button';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
-import { LessonFlow } from '@/components/session/lesson-flow';
-import { PracticeSession, type PracticeWord } from '@/components/session/practice-session';
+import { PracticeSession } from '@/components/session/practice-session';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -14,7 +13,7 @@ import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
 import { generatePractice, prepareLesson } from '@/lib/ai';
 import { loadLessonDetail, markLessonLearned, type LessonDetail } from '@/lib/courses';
-import { buildExercises, type Exercise } from '@/lib/exercises';
+import { buildExercises } from '@/lib/exercises';
 import { useT } from '@/lib/i18n';
 import { buildFlow, explanationSteps, type FlowPage } from '@/lib/lesson-flow';
 import { proficiencyLevel } from '@/lib/proficiency';
@@ -28,14 +27,13 @@ import { supabase } from '@/lib/supabase';
  */
 type View_ =
   | { kind: 'overview' }
-  | { kind: 'learn'; pages: FlowPage[]; lang: string | null }
   | {
-      kind: 'practice';
+      kind: 'learn' | 'practice';
       /** Changes with every new session, so its state starts fresh. */
       key: number;
-      words: PracticeWord[];
-      exercises: Exercise[];
+      pages: FlowPage[];
       lang: string | null;
+      /** Practice only: finishing it completes the lesson for the first time. */
       completesLesson: boolean;
     };
 
@@ -74,8 +72,10 @@ export default function LessonScreen() {
     if (!from.explanation) return;
     setView({
       kind: 'learn',
-      pages: buildFlow(from.explanation, from.items),
+      key: new Date().getTime(),
+      pages: buildFlow(from.explanation, from.items, from.targetLang),
       lang: explanationSteps(from.explanation).lang,
+      completesLesson: false,
     });
   }
 
@@ -86,8 +86,10 @@ export default function LessonScreen() {
     setView({
       kind: 'practice',
       key: new Date().getTime(),
-      words: from.items.map(({ id, term, meaning }) => ({ id, term, meaning })),
-      exercises,
+      pages: [
+        { kind: 'words', words: from.items.map(({ id, term, meaning }) => ({ id, term, meaning })) },
+        ...exercises.map((exercise) => ({ kind: 'exercise' as const, exercise, retry: false })),
+      ],
       lang: from.explanation ? explanationSteps(from.explanation).lang : null,
       completesLesson: !from.completed,
     });
@@ -144,23 +146,37 @@ export default function LessonScreen() {
     return (
       <>
         <Stack.Screen options={{ headerShown: false }} />
-        <LessonFlow
+        <PracticeSession
+          key={view.key}
           pages={view.pages}
+          lessonOf={() => lesson.id}
           lang={view.lang}
           targetLang={lesson.targetLang}
           calm={lesson.study}
-          onClose={closeSession}
-          onDone={(practise) => {
-            // Reaching the end is what counts as learned; closing early does not.
+          resultTitle={t('session.lessonLearned')}
+          resultText={t('session.inReviews')}
+          // Reaching the end is what counts as learned; closing early does not.
+          onFinished={() =>
             markLessonLearned(lesson.id).then(
               () => setReload((n) => n + 1),
               (reason: unknown) => setAiError(reason instanceof Error ? reason.message : String(reason)),
-            );
-            closeSession();
-            if (!practise) return;
-            if (lesson.practice) openPractice(lesson);
-            else newPractice(lesson);
-          }}
+            )
+          }
+          resultFooter={
+            <>
+              <Button
+                title={t('flow.startPractising')}
+                tone="success"
+                onPress={() => {
+                  closeSession();
+                  if (lesson.practice && !lesson.completed) openPractice(lesson);
+                  else newPractice(lesson);
+                }}
+              />
+              <Button title={t('flow.later')} variant="secondary" onPress={closeSession} />
+            </>
+          }
+          onClose={closeSession}
         />
       </>
     );
@@ -172,17 +188,36 @@ export default function LessonScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <PracticeSession
           key={view.key}
-          lessonId={lesson.id}
-          words={view.words}
-          exercises={view.exercises}
+          pages={view.pages}
+          lessonOf={() => lesson.id}
           lang={view.lang}
           targetLang={lesson.targetLang}
           calm={lesson.study}
-          completesLesson={view.completesLesson}
+          resultTitle={view.completesLesson ? t('session.lessonComplete') : t('session.practiceComplete')}
+          resultText={t('session.inReviews')}
           onFinished={practiceFinished}
-          onAgain={() => newPractice(lesson)}
-          againBusy={working === 'practice'}
-          againError={aiError}
+          resultFooter={
+            <>
+              {aiError && <ThemedText style={{ color: theme.danger }}>{aiError}</ThemedText>}
+              {working === 'practice' && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('session.writingNew')}
+                </ThemedText>
+              )}
+              <Button
+                title={t('common.continue')}
+                tone="success"
+                onPress={closeSession}
+                disabled={working === 'practice'}
+              />
+              <Button
+                title={t('session.again')}
+                variant="secondary"
+                onPress={() => newPractice(lesson)}
+                busy={working === 'practice'}
+              />
+            </>
+          }
           onClose={closeSession}
         />
       </>

@@ -43,6 +43,7 @@ import {
   type AppLanguage,
   type HomeworkMode,
   type HomeworkResult,
+  type LessonDrill,
   type StoredPractice,
   type Subject,
   type Validated,
@@ -491,9 +492,14 @@ async function prepareLesson(ctx: Context, body: Body): Promise<void> {
     (value) => validateLessonContent(value, subject, existingTerms),
   );
 
+  // Items get their ids only when they are saved, so a drill names its item by the term.
+  const drills: LessonDrill[] = content.drills.map(({ item, ...drill }) => ({
+    ...drill,
+    term: content.items[item].term,
+  }));
   const saved = await ctx.supabase.rpc('save_lesson_content', {
     p_lesson_id: lesson.id,
-    p_explanation: { lang: content.lang, steps: content.steps, key_points: content.key_points },
+    p_explanation: { lang: content.lang, steps: content.steps, key_points: content.key_points, drills },
     p_items: content.items,
   });
   if (saved.error) throw new AiError(`Database error (lesson): ${saved.error.message}`, 500);

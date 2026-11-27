@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Animated, Pressable, StyleSheet, Vibration, View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -7,6 +7,7 @@ import { Confetti } from '@/components/session/confetti';
 import {
   BuildExercise,
   ChoiceExercise,
+  ClozeExercise,
   MatchExercise,
   TypedExercise,
 } from '@/components/session/exercises';
@@ -19,8 +20,9 @@ import { Spacing } from '@/constants/theme';
 import { useSoundSetting } from '@/hooks/use-sound-setting';
 import { useTheme } from '@/hooks/use-theme';
 import { getDeviceId } from '@/lib/device-id';
+import { filledGap, praise, type Exercise, type MatchPair } from '@/lib/exercises';
 import { useT } from '@/lib/i18n';
-import { praise, type Exercise, type MatchPair } from '@/lib/exercises';
+import { speechForPage, type FlowPage } from '@/lib/lesson-flow';
 import { playSound } from '@/lib/sounds';
 import { speakSegments, stopSpeaking } from '@/lib/speech';
 import { targetSpeech } from '@/lib/speech-text';
@@ -28,35 +30,29 @@ import { supabase } from '@/lib/supabase';
 import { cleanText } from '@/lib/text';
 import { deviceTimeZone } from '@/lib/time-zone';
 
-/** An item of the lesson, shown once more before the exercises. */
+/** An item shown on the "words" page. */
 export type PracticeWord = { id: string; term: string; meaning: string };
 
 type Props = {
-  lessonId: string;
-  words: PracticeWord[];
-  exercises: Exercise[];
+  pages: FlowPage[];
+  /** The lesson an item belongs to, for the learning record (reviews mix lessons). */
+  lessonOf: (itemId: string) => string | undefined;
   /** The learner's language; null when unknown. */
   lang: string | null;
   /** The language being learned; null for other subjects. */
   targetLang: string | null;
   /** Read in the calm voice (study courses) instead of the lively one. */
   calm?: boolean;
-  /** Whether finishing this session completes the lesson for the first time. */
-  completesLesson: boolean;
-  /** Called once when the last exercise is done, before the result page shows. */
+  /** The headline of the result page ("Lesson complete!"). */
+  resultTitle: string;
+  /** The line under it when not everything was right at the first try. */
+  resultText: string;
+  /** Called once when the last page is done, before the result page shows. */
   onFinished: () => void;
-  /** "New exercises": the screen makes a new session and replaces this one. */
-  onAgain: () => void;
-  againBusy: boolean;
-  againError: string | null;
+  /** The buttons (and any message) at the bottom of the result page. */
+  resultFooter: ReactNode;
   onClose: () => void;
 };
-
-type Page =
-  /** The lesson's items at a glance, before the first exercise. */
-  | { kind: 'words' }
-  /** `retry`: asked a second time at the end, after a wrong answer. */
-  | { kind: 'exercise'; exercise: Exercise; retry: boolean };
 
 /** What record_quiz_answer returns (see the points migration). */
 type AnswerResult = { points: number; goal_reached: boolean };
@@ -64,35 +60,33 @@ type AnswerResult = { points: number; goal_reached: boolean };
 type Verdict = { correct: boolean; title: string; answer?: string; explanation?: string };
 
 /**
- * A practice session, one page at a time: first the lesson's items once more
- * on a single page, then the exercises with feedback after each, then the
- * result with a celebration.
- * An exercise answered wrongly comes back once at the end. Every answer is
- * appended to the learning record (review_events, through
- * record_quiz_answer) as structured data, so it counts towards proficiency,
- * and earns points by the kind of exercise (decided in the database).
+ * A session, one page at a time, used for lessons, practice and reviews:
+ * introduction cards, new items and the recap are read and passed with
+ * "Continue"; exercises get feedback with sound, a combo counter for answers
+ * right in a row, and points. An exercise answered wrongly comes back once
+ * at the end. The session ends with a result page and confetti.
+ *
+ * Every answer is appended to the learning record (review_events, through
+ * record_quiz_answer) as structured data, so it counts towards proficiency
+ * and the daily goal, and earns points by the kind of exercise (decided in
+ * the database).
  */
 export function PracticeSession({
-  lessonId,
-  words,
-  exercises,
+  pages,
+  lessonOf,
   lang,
   targetLang,
   calm,
-  completesLesson,
+  resultTitle,
+  resultText,
   onFinished,
-  onAgain,
-  againBusy,
-  againError,
+  resultFooter,
   onClose,
 }: Props) {
   const theme = useTheme();
   const { t } = useT();
   const { sound, toggleSound } = useSoundSetting();
-  const [queue, setQueue] = useState<Page[]>(() => [
-    ...(words.length > 0 ? [{ kind: 'words' } as Page] : []),
-    ...exercises.map((exercise): Page => ({ kind: 'exercise', exercise, retry: false })),
-  ]);
+  const [queue, setQueue] = useState<FlowPage[]>(pages);
   const [index, setIndex] = useState(0);
   const [given, setGiven] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
@@ -112,18 +106,30 @@ export function PracticeSession({
   const page = queue[index];
   const last = index === queue.length - 1;
   const exercise = page.kind === 'exercise' ? page.exercise : null;
+  const exerciseCount = pages.filter((p) => p.kind === 'exercise').length;
 
   /** Reads only what is in the language being learned (never a translation). */
   function speakTarget(text: string) {
     if (!targetLang) return;
-    const korean = targetSpeech(text, targetLang);
-    if (korean !== '') speakSegments([{ text: korean, lang: targetLang, slow: true }]);
+    const spoken = targetSpeech(text, targetLang);
+    if (spoken !== '') speakSegments([{ text: spoken, lang: targetLang, slow: true }]);
   }
 
   /** A word of the list: the term in a language course, otherwise term and meaning. */
   function speakWord(word: PracticeWord) {
     if (targetLang) speakTarget(word.term);
     else if (lang) speakSegments([{ text: `${word.term}: ${word.meaning}`, lang, calm }]);
+  }
+
+  /** What a lesson page says (cards, items, recap), each stretch in its language's voice. */
+  function speakPage() {
+    speakSegments(
+      speechForPage(page, lang, targetLang).map((segment) => ({
+        ...segment,
+        slow: segment.lang === targetLang,
+        calm,
+      })),
+    );
   }
 
   useEffect(
@@ -136,15 +142,22 @@ export function PracticeSession({
   // What is heard when a page appears.
   useEffect(() => {
     if (!sound || finished) return;
-    // The word list is not read out: it is a look back, heard by tapping a word.
-    if (page.kind === 'exercise' && page.exercise.kind === 'listen') {
-      speakTarget(page.exercise.term);
+    if (page.kind === 'exercise') {
+      const shown = page.exercise;
+      if (shown.kind === 'listen') speakTarget(shown.term);
+      // A prompt in the language being learned is read; one in the learner's language is not.
+      else if (shown.kind === 'choice' || shown.kind === 'build' || shown.kind === 'cloze') speakTarget(shown.prompt);
+    } else if (page.kind !== 'words') {
+      // The word list is not read out: it is a look back, heard by tapping a word.
+      speakPage();
     }
     // Speaks when a new page appears or sound is switched on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, sound, finished]);
 
   async function record(itemId: string, correct: boolean, kind: Exercise['kind'], value: string) {
+    const lessonId = lessonOf(itemId);
+    if (!lessonId) return;
     const now = new Date();
     const { data, error } = await supabase.rpc('record_quiz_answer', {
       p_lesson_id: lessonId,
@@ -197,11 +210,13 @@ export function PracticeSession({
       correct,
       title: t(correct ? praise() : comesBack ? 'feedback.comesBack' : 'feedback.notQuite'),
       answer: correct ? undefined : exercise.answer,
-      explanation: exercise.kind === 'listen' ? undefined : exercise.explanation,
+      explanation: exercise.kind === 'listen' || exercise.explanation === '' ? undefined : exercise.explanation,
     });
     // Hearing the right answer once more helps it stick.
-    if (sound && exercise.kind !== 'choice') {
-      speakTarget(exercise.kind === 'listen' ? exercise.term : exercise.answer);
+    if (sound) {
+      if (exercise.kind === 'listen') speakTarget(exercise.term);
+      else if (exercise.kind === 'cloze') speakTarget(filledGap(exercise.prompt, exercise.answer));
+      else if (exercise.kind !== 'choice') speakTarget(exercise.answer);
     }
   }
 
@@ -224,9 +239,17 @@ export function PracticeSession({
     });
   }
 
-  function next() {
+  function go(to: number) {
     stopSpeaking();
+    setIndex(to);
+    setGiven(null);
+    setVerdict(null);
+    setShownAt(new Date().getTime());
+  }
+
+  function next() {
     if (last) {
+      stopSpeaking();
       setFinished(true);
       if (sound) playSound('complete');
       Vibration.vibrate([0, 60, 80, 60]);
@@ -234,16 +257,13 @@ export function PracticeSession({
       onFinished();
       return;
     }
-    setIndex(index + 1);
-    setGiven(null);
-    setVerdict(null);
-    setShownAt(new Date().getTime());
+    go(index + 1);
   }
 
   if (finished) {
-    const total = exercises.length;
+    const perfect = exerciseCount > 0 && firstTry === exerciseCount;
     const stats = [
-      { value: `${firstTry}/${total}`, label: t('session.firstTry') },
+      ...(exerciseCount > 0 ? [{ value: `${firstTry}/${exerciseCount}`, label: t('session.firstTry') }] : []),
       { value: `🔥 ${bestStreak}`, label: t('session.bestStreak') },
       { value: `⭐ ${points}`, label: t('session.points') },
     ];
@@ -254,27 +274,16 @@ export function PracticeSession({
           sound={sound}
           onToggleSound={toggleSound}
           onClose={onClose}
-          footer={
-            <>
-              {againError && <ThemedText style={{ color: theme.danger }}>{againError}</ThemedText>}
-              {againBusy && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {t('session.writingNew')}
-                </ThemedText>
-              )}
-              <Button title={t('common.continue')} tone="success" onPress={onClose} disabled={againBusy} />
-              <Button title={t('session.again')} variant="secondary" onPress={onAgain} busy={againBusy} />
-            </>
-          }>
+          footer={resultFooter}>
           <View style={styles.result}>
             <Animated.Text style={[styles.trophy, { transform: [{ scale }] }]}>
-              {firstTry === total ? '🏆' : '🎉'}
+              {perfect ? '🏆' : '🎉'}
             </Animated.Text>
             <ThemedText type="subtitle" style={styles.center}>
-              {completesLesson ? t('session.lessonComplete') : t('session.practiceComplete')}
+              {resultTitle}
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.center}>
-              {firstTry === total ? t('session.allRight') : t('session.inReviews')}
+              {perfect ? t('session.allRight') : resultText}
             </ThemedText>
             <View style={styles.stats}>
               {stats.map((stat) => (
@@ -294,9 +303,20 @@ export function PracticeSession({
     );
   }
 
+  // Lesson pages go back one page, as long as the page before is not an exercise.
+  const previous = queue[index - 1];
+  const canGoBack = page.kind !== 'exercise' && previous !== undefined && previous.kind !== 'exercise';
   let footer = null;
-  if (page.kind === 'words') {
-    footer = <Button title={t('flow.startPractising')} onPress={next} />;
+  if (page.kind !== 'exercise') {
+    footer = (
+      <>
+        <Button
+          title={page.kind === 'words' ? t('flow.startPractising') : last ? t('common.finish') : t('common.continue')}
+          onPress={next}
+        />
+        {canGoBack && <Button title={t('common.back')} variant="secondary" onPress={() => go(index - 1)} />}
+      </>
+    );
   } else if (verdict) {
     footer = (
       <>
@@ -309,6 +329,7 @@ export function PracticeSession({
       </>
     );
   }
+  const hasSound = page.kind !== 'exercise' && page.kind !== 'words' && speechForPage(page, lang, targetLang).length > 0;
 
   return (
     <View style={styles.fill}>
@@ -318,93 +339,181 @@ export function PracticeSession({
         onToggleSound={toggleSound}
         onClose={onClose}
         footer={footer}>
-        {page.kind === 'exercise' && (
+        <View style={styles.scoreRow}>
+          {/* The combo: answers right in a row. */}
+          {streak >= 2 && (
+            <ThemedText type="smallBold" style={{ color: theme.tint }}>
+              {t('session.combo', { n: streak })}
+            </ThemedText>
+          )}
           <ThemedText type="smallBold" themeColor="textSecondary" style={styles.points}>
             ⭐ {points}
           </ThemedText>
-        )}
+        </View>
         <Appear key={index} style={styles.page}>
-        {page.kind === 'words' && (
-          <>
-            <ThemedText style={styles.wordsTitle}>{t('session.wordsTitle')}</ThemedText>
-            {(targetLang ?? lang) && (
-              <ThemedText type="small" themeColor="textSecondary">
-                {t('session.wordsHint')}
-              </ThemedText>
-            )}
-            <View style={styles.words}>
-              {words.map((word) => (
-                <Pressable
-                  key={word.id}
-                  onPress={() => speakWord(word)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${word.term}: ${word.meaning}`}
-                  style={({ pressed }) => [
-                    styles.word,
-                    { backgroundColor: theme.backgroundElement },
-                    pressed && styles.dimmed,
-                  ]}>
-                  <ThemedText style={[styles.wordTerm, { color: theme.tint }]}>{word.term}</ThemedText>
-                  <ThemedText themeColor="textSecondary" style={styles.wordMeaning}>
-                    {word.meaning}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        )}
+          {page.kind === 'words' && (
+            <>
+              <ThemedText style={styles.wordsTitle}>{t('session.wordsTitle')}</ThemedText>
+              {(targetLang ?? lang) && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('session.wordsHint')}
+                </ThemedText>
+              )}
+              <View style={styles.words}>
+                {page.words.map((word) => (
+                  <Pressable
+                    key={word.id}
+                    onPress={() => speakWord(word)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${word.term}: ${word.meaning}`}
+                    style={({ pressed }) => [
+                      styles.word,
+                      { backgroundColor: theme.backgroundElement },
+                      pressed && styles.dimmed,
+                    ]}>
+                    <ThemedText style={[styles.wordTerm, { color: theme.tint }]}>{word.term}</ThemedText>
+                    <ThemedText themeColor="textSecondary" style={styles.wordMeaning}>
+                      {word.meaning}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
 
-        {page.kind === 'exercise' && page.retry && (
-          <ThemedText type="smallBold" style={{ color: theme.tint }}>
-            {t('session.onceMore')}
-          </ThemedText>
-        )}
-        {exercise?.kind === 'choice' && (
-          <ChoiceExercise
-            instruction={t('ex.choose')}
-            prompt={exercise.prompt}
-            options={exercise.options}
-            answer={exercise.answer}
-            given={given}
-            onAnswer={answer}
-          />
-        )}
-        {exercise?.kind === 'listen' && (
-          <ChoiceExercise
-            instruction={t('ex.hear')}
-            options={exercise.options}
-            answer={exercise.answer}
-            onListen={() => speakTarget(exercise.term)}
-            given={given}
-            onAnswer={answer}
-          />
-        )}
-        {exercise?.kind === 'typed' && (
-          <TypedExercise
-            prompt={exercise.prompt}
-            answer={exercise.answer}
-            korean={targetLang === 'ko'}
-            given={given}
-            onAnswer={answer}
-          />
-        )}
-        {exercise?.kind === 'build' && (
-          <BuildExercise
-            prompt={exercise.prompt}
-            tiles={exercise.tiles}
-            answer={exercise.answer}
-            given={given}
-            onAnswer={answer}
-          />
-        )}
-        {exercise?.kind === 'match' && (
-          <MatchExercise
-            pairs={exercise.pairs}
-            meanings={exercise.meanings}
-            onPair={pairTried}
-            onDone={pairsDone}
-          />
-        )}
+          {page.kind === 'item' && (
+            <ThemedText type="smallBold" style={[styles.label, { color: theme.tint }]}>
+              {t('flow.new')}
+            </ThemedText>
+          )}
+          {(page.kind === 'step' || page.kind === 'item' || page.kind === 'recap') && (
+            <ThemedView type="backgroundElement" style={styles.card}>
+              {page.kind === 'step' && (
+                <>
+                  {page.step.title && <ThemedText style={styles.stepTitle}>{page.step.title}</ThemedText>}
+                  <ThemedText style={page.step.title ? styles.stepLine : styles.stepText}>
+                    {page.step.parts.map((part, i) =>
+                      part.target ? (
+                        <ThemedText
+                          key={i}
+                          style={[
+                            page.step.title ? styles.stepLine : styles.stepText,
+                            styles.target,
+                            { color: theme.tint },
+                          ]}>
+                          {part.text}
+                        </ThemedText>
+                      ) : (
+                        part.text
+                      ),
+                    )}
+                  </ThemedText>
+                  {page.step.example && (
+                    <View
+                      style={[styles.example, { backgroundColor: theme.background, borderLeftColor: theme.tint }]}>
+                      <ThemedText type="smallBold" themeColor="textSecondary" style={styles.label}>
+                        {t('flow.example')}
+                      </ThemedText>
+                      <ThemedText style={styles.exampleText}>{page.step.example.text}</ThemedText>
+                      {page.step.example.note !== '' && (
+                        <ThemedText themeColor="textSecondary">{page.step.example.note}</ThemedText>
+                      )}
+                    </View>
+                  )}
+                </>
+              )}
+              {page.kind === 'item' && (
+                <>
+                  <ThemedText style={styles.term}>{page.item.term}</ThemedText>
+                  <ThemedText style={styles.stepText}>{page.item.meaning}</ThemedText>
+                  {page.item.notes && <ThemedText themeColor="textSecondary">{page.item.notes}</ThemedText>}
+                </>
+              )}
+              {page.kind === 'recap' && (
+                <>
+                  <ThemedText style={styles.recapTitle}>{t('flow.recap')}</ThemedText>
+                  {page.keyPoints.map((point) => (
+                    <ThemedText key={point} style={styles.point}>
+                      • {point}
+                    </ThemedText>
+                  ))}
+                </>
+              )}
+              {hasSound && (
+                <Pressable
+                  onPress={speakPage}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.readAloud')}
+                  hitSlop={Spacing.two}
+                  style={styles.listen}>
+                  <ThemedText style={styles.listenIcon}>🔊</ThemedText>
+                </Pressable>
+              )}
+            </ThemedView>
+          )}
+
+          {page.kind === 'exercise' && page.retry && (
+            <ThemedText type="smallBold" style={{ color: theme.tint }}>
+              {t('session.onceMore')}
+            </ThemedText>
+          )}
+          {exercise?.kind === 'choice' && (
+            <ChoiceExercise
+              instruction={t('ex.choose')}
+              prompt={exercise.prompt}
+              translation={exercise.translation}
+              options={exercise.options}
+              answer={exercise.answer}
+              given={given}
+              onAnswer={answer}
+            />
+          )}
+          {exercise?.kind === 'listen' && (
+            <ChoiceExercise
+              instruction={t('ex.hear')}
+              options={exercise.options}
+              answer={exercise.answer}
+              onListen={() => speakTarget(exercise.term)}
+              given={given}
+              onAnswer={answer}
+            />
+          )}
+          {exercise?.kind === 'typed' && (
+            <TypedExercise
+              prompt={exercise.prompt}
+              answer={exercise.answer}
+              korean={targetLang === 'ko'}
+              given={given}
+              onAnswer={answer}
+            />
+          )}
+          {exercise?.kind === 'build' && (
+            <BuildExercise
+              prompt={exercise.prompt}
+              tiles={exercise.tiles}
+              answer={exercise.answer}
+              given={given}
+              onAnswer={answer}
+            />
+          )}
+          {exercise?.kind === 'cloze' && (
+            <ClozeExercise
+              prompt={exercise.prompt}
+              options={exercise.options}
+              answer={exercise.answer}
+              translation={exercise.translation}
+              given={given}
+              onAnswer={answer}
+            />
+          )}
+          {exercise?.kind === 'match' && (
+            <MatchExercise
+              pairs={exercise.pairs}
+              meanings={exercise.meanings}
+              onPair={pairTried}
+              onDone={pairsDone}
+            />
+          )}
         </Appear>
       </SessionLayout>
       {goalReached && <GoalCelebration streak={null} onDone={endCelebration} />}
@@ -414,7 +523,8 @@ export function PracticeSession({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  points: { alignSelf: 'flex-end' },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  points: { marginLeft: 'auto' },
   page: { gap: Spacing.three },
   label: { textTransform: 'uppercase', letterSpacing: 0.5 },
   wordsTitle: { fontSize: 26, lineHeight: 34, fontWeight: 700 },
@@ -430,6 +540,24 @@ const styles = StyleSheet.create({
   wordTerm: { flex: 1, fontSize: 20, lineHeight: 28, fontWeight: 700 },
   wordMeaning: { flex: 1, textAlign: 'right' },
   dimmed: { opacity: 0.6 },
+  card: {
+    padding: Spacing.four,
+    borderRadius: Spacing.four,
+    gap: Spacing.three,
+    minHeight: 200,
+    justifyContent: 'center',
+  },
+  stepText: { fontSize: 22, lineHeight: 32 },
+  stepTitle: { fontSize: 26, lineHeight: 34, fontWeight: 700 },
+  stepLine: { fontSize: 18, lineHeight: 27 },
+  example: { padding: Spacing.three, borderRadius: Spacing.two, borderLeftWidth: 4, gap: Spacing.one },
+  exampleText: { fontSize: 22, lineHeight: 32, fontWeight: 700 },
+  target: { fontWeight: 700 },
+  term: { fontSize: 36, lineHeight: 48, fontWeight: 700 },
+  recapTitle: { fontSize: 20, lineHeight: 28, fontWeight: 700 },
+  point: { fontSize: 17, lineHeight: 26 },
+  listen: { alignSelf: 'flex-start' },
+  listenIcon: { fontSize: 24, lineHeight: 32 },
   result: { alignItems: 'center', gap: Spacing.three },
   trophy: { fontSize: 88, lineHeight: 104 },
   center: { textAlign: 'center' },

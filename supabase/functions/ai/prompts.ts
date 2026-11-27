@@ -129,7 +129,7 @@ export function lessonSystem(subject: Subject, targetLang: string): string {
     subject === 'language'
       ? `example.text is one word, phrase or short sentence in the language being learned (code "${targetLang}") that shows the idea, with nothing else in it; example.note is its translation.`
       : 'example.text is one concrete instance of the idea: a formula, a number worked out, or a case from everyday life; example.note says in a few words what it shows, or is empty when the example speaks for itself.';
-  return `You write one lesson of a self-study course in a spaced-repetition learning app. The learner goes through the lesson on a phone: the app shows the introduction as a few cards, one at a time, then the new items one by one with a quick check in between. Each item becomes flashcards (the app shows the meaning and asks for the term, and the other way round), so the items are what the learner will actually remember from the lesson.
+  return `You write one lesson of a self-study course in a spaced-repetition learning app. The learner goes through the lesson on a phone: the app shows the introduction as a few cards, one at a time, then the new items one by one with a quick check in between, and then a few drills that use the items in sentences. Each item becomes flashcards (the app shows the meaning and asks for the term, and the other way round), so the items are what the learner will actually remember from the lesson.
 
 - steps: the introduction, as 3 to 5 cards. A card presents one idea of the lesson so that it can be taken in at a glance: a headline, one sentence and one example. The learner should be able to read a card in a few seconds, so leave out everything that is not the idea itself: no greeting, no scene-setting, no rhetorical questions, no comparisons or images, no announcement of what the lesson will cover, and no lead-in to the next card. The details belong to the items, which follow the cards; the cards give the few ideas that hold the items together.
 - title: the card's headline, 2 to 5 words that name the idea itself ("Verbs come last", "Force changes motion"), not its place in the lesson ("Introduction", "Step 2").
@@ -142,6 +142,14 @@ export function lessonSystem(subject: Subject, targetLang: string): string {
 - items: 4 to 10 items that together cover the objectives. kind is one of: ${kinds}.
 ${itemRules}
 - Every term is new: none of the terms the course already has may appear again, and no two items share a term.
+- drills: 4 to 6 short exercises the learner does right after meeting the items, to use them in sentences at once. ${
+    subject === 'language'
+      ? 'Use kinds "build" and "cloze" (mostly) and "choice"; at least one "build" in each direction.'
+      : 'Use kinds "cloze" and "choice".'
+  } Keep them easy: short sentences with this lesson's items and otherwise only very common words. Give every item at most two drills.
+
+How the drills are written:
+${QUESTION_RULES}
 
 ${LANGUAGE_RULE}`;
 }
@@ -178,24 +186,36 @@ function materialBlock(material: string): string {
   return `This is a university course, and the student uploaded its material: lecture notes, exercise sheets and their own notes. Below are the parts of it that belong to this lesson. Take the content, the notation and the terminology from it, so that what you write matches their lecture and their exam. Base examples and questions on the kinds of exercises in it, with new numbers or cases instead of copies. Where the material does not cover this lesson, use standard knowledge of the subject.\n\n<course_material>\n${material}\n</course_material>`;
 }
 
+// --- Questions (practice and a lesson's drills) ----------------------------------
+
+/**
+ * How each kind of question is written. Shared by practice and by the
+ * drills of a lesson, so both are checked the same way by the app.
+ */
+const QUESTION_RULES = `Each question is tied to the one item it mainly tests (item is that item's number in the list, starting at 0). Fields: kind, prompt, options, answer, translation, explanation.
+- kind "build" (language courses only): the learner translates a sentence by putting word tiles in order. Use both directions and mix them: (a) prompt is a short sentence in the learner's language and answer is its translation in the language being learned; (b) prompt is a sentence in the language being learned and answer is its translation in the learner's language. answer has 3 to 8 words separated by spaces and only one natural word order; options holds 2 or 3 single words in the language of the answer that do not belong in it. Use the item and otherwise only words the learner already knows (the items listed, or very common words). translation is empty.
+- kind "cloze": a sentence with one gap. prompt is one sentence with exactly one gap written as ___ (three underscores) where the item, or the right form or ending of it, belongs. In a language course the sentence is in the language being learned; otherwise it is a statement, rule or formula of the subject. answer is exactly the text that fills the gap; options holds 3 or 4 candidates (similar words, other forms or endings) and includes the answer character for character. Only one option may fit. translation is the whole sentence in the learner's language (in a language course; otherwise empty).
+- kind "choice": 3 or 4 options, exactly one correct; answer repeats the correct option character for character, and its position varies. Prefer whole sentences: what a sentence means, which sentence fits a situation ("How do you ask for the bill?"), or which sentence is correct. When prompt is in the language being learned, translation is the prompt in the learner's language; otherwise translation is empty.
+- kind "typed": options is an empty list and answer is a single word or short phrase that can be checked exactly, normally the item's term. Ask in a way that has only that one answer, and never show the answer inside the prompt. translation is empty.
+- explanation: one or two sentences shown after answering, saying why the answer is right.
+- Everything is plain text without markdown.`;
+
 // --- Practice ----------------------------------------------------------------
 
 export const PRACTICE_SYSTEM = `You write a practice round for one lesson of a self-study course: a short quiz. The learner has seen the lesson, and the app shows its items once more before the first question; the app tells you how well they currently know each of its items (proficiency from 0 to 100, from their flashcard reviews and earlier quiz answers).
 
+Practise in sentences, not in single words. In a language course at least two thirds of the questions are "build" or "cloze" (mix both, and both directions of "build"), the "choice" questions use whole sentences too, and there is at most one "typed" question. In other courses use mostly "cloze" and "choice" with statements and situations from the subject.
+
 Use the proficiency to decide what to practise and how hard:
 - Give the weakest items the most questions; every item with proficiency under 50 gets at least one, as far as the question count allows. Strong items get at most one, and it should be demanding.
-- Below about 40: recognition. Multiple choice with clearly wrong but plausible distractors, close to how the item was taught.
-- About 40 to 75: recall and use. Typed answers, or multiple choice in a new context.
-- Above about 75: application. A new sentence or situation, a combination of two items, or a question about why or when.
+- Below about 40: short sentences; "build" from the language being learned into the learner's language; "cloze" with clearly different options.
+- About 40 to 75: "build" into the language being learned; "cloze" whose options are forms or endings of the same word.
+- Above about 75: longer sentences, a new situation, or two items in one sentence.
 
 The app adds matching pairs and listening exercises from the items by itself, so do not write questions of those kinds.
 
-Questions (5 to 8), each tied to the one item it mainly tests (item is that item's number in the list):
-- kind "choice": 3 or 4 options, exactly one correct; answer repeats the correct option character for character. Vary the position of the correct option.
-- kind "build" (language courses only, and only for items with proficiency of about 40 or more; at most two per round): the learner puts word tiles in order. prompt is a short sentence in the learner's language; answer is its translation in the language being learned, 3 to 7 words separated by spaces, using the item and otherwise only very common words; options holds 2 or 3 single words in the language being learned that do not belong in the sentence. Write a sentence with only one natural word order.
-- kind "typed": options is an empty list and answer is a single word or short phrase that can be checked exactly, normally the item's term. Ask in a way that has only that one answer, and never show the answer inside the prompt.
-- explanation: one or two sentences shown after answering, saying why the answer is right.
-- Prompts are plain text without markdown.
+Write 6 to 9 questions.
+${QUESTION_RULES}
 
 ${LANGUAGE_RULE}`;
 

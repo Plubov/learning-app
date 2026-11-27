@@ -182,6 +182,35 @@ describe('validateLessonContent', () => {
   it('rejects a lesson without items', () => {
     expect(validateLessonContent({ ...content, items: [] }, 'language').ok).toBe(false);
   });
+
+  describe('drills', () => {
+    const cloze = {
+      item: 0,
+      kind: 'cloze',
+      prompt: '선생님, ___!',
+      options: ['안녕하세요', '안녕'],
+      answer: '안녕하세요',
+      translation: 'Hello, teacher!',
+      explanation: '',
+    };
+
+    it('are optional, as for lessons written before them', () => {
+      const result = validateLessonContent(content, 'language');
+      expect(result.ok && result.value.drills).toEqual([]);
+    });
+
+    it('are accepted when they point at the lesson\'s items', () => {
+      const result = validateLessonContent({ ...content, drills: [cloze] }, 'language');
+      expect(result.ok && result.value.drills.map((d) => d.kind)).toEqual(['cloze']);
+    });
+
+    it.each([
+      ['a typed drill', { ...cloze, kind: 'typed', options: [] }],
+      ['a drill about an item that does not exist', { ...cloze, item: 2 }],
+    ])('rejects %s', (_name, drill) => {
+      expect(validateLessonContent({ ...content, drills: [drill] }, 'language').ok).toBe(false);
+    });
+  });
 });
 
 describe('validatePractice', () => {
@@ -242,6 +271,43 @@ describe('validatePractice', () => {
     it('rejects them outside language courses', () => {
       expect(validatePractice({ questions: [build] }, 2, 'science').ok).toBe(false);
     });
+  });
+
+  describe('cloze questions', () => {
+    const cloze = {
+      item: 1,
+      kind: 'cloze',
+      prompt: '저는 ____ 마셔요.',
+      options: ['물을', '물이', '물은'],
+      answer: '물을',
+      translation: 'I drink water.',
+      explanation: '을 marks the object.',
+    };
+
+    it('accept one gap and write it the same way every time', () => {
+      const result = validatePractice({ questions: [cloze] }, 2);
+      expect(result.ok && result.value.questions[0].prompt).toBe('저는 ___ 마셔요.');
+      expect(result.ok && result.value.questions[0].translation).toBe('I drink water.');
+    });
+
+    it('are allowed outside language courses', () => {
+      const science = { ...cloze, prompt: 'F = m · ___', options: ['a', 'v'], answer: 'a', translation: '' };
+      expect(validatePractice({ questions: [science] }, 2, 'science').ok).toBe(true);
+    });
+
+    it.each([
+      ['no gap', { ...cloze, prompt: '저는 물을 마셔요.' }],
+      ['two gaps', { ...cloze, prompt: '___는 ___ 마셔요.' }],
+      ['an answer that is not an option', { ...cloze, answer: '차를' }],
+      ['a single option', { ...cloze, options: ['물을'] }],
+    ])('reject %s', (_name, question) => {
+      expect(validatePractice({ questions: [question] }, 2).ok).toBe(false);
+    });
+  });
+
+  it('accepts questions written before the translation field', () => {
+    const result = validatePractice({ questions: [choice] }, 2);
+    expect(result.ok && result.value.questions[0].translation).toBe('');
   });
 
   it('rejects practice without questions', () => {

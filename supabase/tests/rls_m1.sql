@@ -152,6 +152,13 @@ begin
      or public.event_points('production', null, 1::smallint, true) <> 0 then
     raise exception 'FAIL: event_points gives wrong flashcard points';
   end if;
+  -- Exercise points, including the gap and conversation exercises.
+  if public.event_points(null, 'cloze', null, true) <> 10
+     or public.event_points(null, 'talk', null, true) <> 10
+     or public.event_points(null, 'build', null, true) <> 15
+     or public.event_points(null, 'cloze', null, false) <> 0 then
+    raise exception 'FAIL: event_points gives wrong exercise points';
+  end if;
 
   -- B cannot review the card of A.
   begin

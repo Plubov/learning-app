@@ -5,7 +5,8 @@
  *
  * A session mixes two sources:
  *   - the questions the AI wrote for the learner's level (multiple choice,
- *     typed answer, building a sentence from word tiles), and
+ *     typed answer, building a sentence from word tiles, filling a gap in a
+ *     sentence), and
  *   - exercises made here from the lesson's own items, without AI: matching
  *     pairs and, for language courses, listening.
  */
@@ -17,10 +18,29 @@ export type PracticeItem = { id: string; term: string; meaning: string; proficie
 export type MatchPair = { itemId: string; term: string; meaning: string };
 
 export type Exercise =
-  | { kind: 'choice'; itemId: string; prompt: string; options: string[]; answer: string; explanation: string }
+  /** `translation`: the prompt in the learner's language when it is in the language being learned, else ''. */
+  | {
+      kind: 'choice';
+      itemId: string;
+      prompt: string;
+      options: string[];
+      answer: string;
+      translation: string;
+      explanation: string;
+    }
   | { kind: 'typed'; itemId: string; prompt: string; answer: string; explanation: string }
   /** Put `tiles` in order to translate `prompt`; `answer` is the sentence. */
   | { kind: 'build'; itemId: string; prompt: string; tiles: string[]; answer: string; explanation: string }
+  /** `prompt` has one gap "___"; `answer` fills it; `translation` is the whole sentence. */
+  | {
+      kind: 'cloze';
+      itemId: string;
+      prompt: string;
+      options: string[];
+      answer: string;
+      translation: string;
+      explanation: string;
+    }
   /** Hear `term`, pick its meaning. */
   | { kind: 'listen'; itemId: string; term: string; options: string[]; answer: string }
   /** Tap a term and its meaning; `meanings` is the shuffled right-hand column. */
@@ -67,6 +87,39 @@ function distinctWeakest(items: readonly PracticeItem[]): PracticeItem[] {
   return result;
 }
 
+/** A question as written by the AI (practice or a lesson's drill), whichever way it names its item. */
+export type WrittenQuestion = Omit<Question, 'item_id'>;
+
+/**
+ * The exercise for one AI-written question, or none when it cannot be shown
+ * here (sentence building outside a language course).
+ */
+export function exerciseFor(
+  question: WrittenQuestion,
+  itemId: string,
+  targetLang: string | null,
+  random: () => number = Math.random,
+): Exercise[] {
+  const base = { itemId, prompt: question.prompt, answer: question.answer, explanation: question.explanation };
+  const translation = question.translation ?? '';
+  switch (question.kind) {
+    case 'choice':
+      return [{ kind: 'choice', ...base, options: question.options, translation }];
+    case 'build':
+      return targetLang ? [{ kind: 'build', ...base, tiles: tilesFor(question.answer, question.options, random) }] : [];
+    case 'typed':
+      return [{ kind: 'typed', ...base }];
+    case 'cloze':
+      // Shuffled, so the answer is not always where the AI put it.
+      return [{ kind: 'cloze', ...base, options: shuffled(question.options, random), translation }];
+  }
+}
+
+/** The cloze sentence with its gap filled (for reading it aloud after the answer). */
+export function filledGap(prompt: string, answer: string): string {
+  return prompt.replace('___', answer);
+}
+
 /**
  * The exercises of a session, in order.
  * @param targetLang the language being learned; null for other subjects
@@ -78,17 +131,7 @@ export function buildExercises(
   targetLang: string | null,
   random: () => number = Math.random,
 ): Exercise[] {
-  const fromAi: Exercise[] = [];
-  for (const question of questions) {
-    const base = { itemId: question.item_id, prompt: question.prompt, answer: question.answer, explanation: question.explanation };
-    if (question.kind === 'choice') {
-      fromAi.push({ kind: 'choice', ...base, options: question.options });
-    } else if (question.kind === 'build' && targetLang) {
-      fromAi.push({ kind: 'build', ...base, tiles: tilesFor(question.answer, question.options, random) });
-    } else if (question.kind === 'typed') {
-      fromAi.push({ kind: 'typed', ...base });
-    }
-  }
+  const fromAi = questions.flatMap((question) => exerciseFor(question, question.item_id, targetLang, random));
 
   const distinct = distinctWeakest(items);
   const extras: Exercise[] = [];

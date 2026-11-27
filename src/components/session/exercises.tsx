@@ -38,6 +38,7 @@ type AnswerProps = {
 export function ChoiceExercise({
   instruction,
   prompt,
+  translation,
   options,
   answer,
   onListen,
@@ -46,6 +47,8 @@ export function ChoiceExercise({
 }: AnswerProps & {
   instruction: string;
   prompt?: string;
+  /** The prompt in the learner's language, shown after answering ('' for none). */
+  translation?: string;
   options: string[];
   answer: string;
   onListen?: () => void;
@@ -61,6 +64,10 @@ export function ChoiceExercise({
     <View style={styles.exercise}>
       <Instruction>{instruction}</Instruction>
       {prompt !== undefined && <ThemedText style={styles.prompt}>{prompt}</ThemedText>}
+      {/* Shown only after answering: before, it would give the answer away. */}
+      {given !== null && translation && (
+        <ThemedText themeColor="textSecondary">{translation}</ThemedText>
+      )}
       {onListen && (
         <Pressable
           onPress={onListen}
@@ -186,6 +193,61 @@ export function BuildExercise({
 }
 
 /**
+ * Filling a gap: the sentence with its gap marked, the options below as
+ * tiles. Tapping one puts it into the gap and checks it at once; the
+ * sentence's translation helps to know what is meant.
+ */
+export function ClozeExercise({
+  prompt,
+  options,
+  answer,
+  translation,
+  given,
+  onAnswer,
+}: AnswerProps & { prompt: string; options: string[]; answer: string; translation: string }) {
+  const theme = useTheme();
+  const { t } = useT();
+  const [before, after = ''] = prompt.split('___');
+  const filled = given ?? null;
+  const gapColor = filled === null ? theme.tint : filled === answer ? theme.success : theme.danger;
+
+  function stateOf(option: string): OptionState {
+    if (given === null) return 'idle';
+    if (option === answer) return 'correct';
+    return option === given ? 'wrong' : 'done';
+  }
+
+  return (
+    <View style={styles.exercise}>
+      <Instruction>{t('ex.cloze')}</Instruction>
+      <ThemedText style={styles.prompt}>
+        {before}
+        <ThemedText style={[styles.prompt, styles.gap, { color: gapColor, textDecorationColor: gapColor }]}>
+          {filled === null ? '   ' : ` ${filled} `}
+        </ThemedText>
+        {after}
+      </ThemedText>
+      {translation !== '' && <ThemedText themeColor="textSecondary">{translation}</ThemedText>}
+      {given !== null && given !== answer && (
+        <ThemedText style={[styles.prompt, { color: theme.success }]}>{before + answer + after}</ThemedText>
+      )}
+      <View style={styles.bank}>
+        {options.map((option) => (
+          <OptionCard
+            key={option}
+            compact
+            label={option}
+            state={stateOf(option)}
+            disabled={given !== null}
+            onPress={() => onAnswer(option, option === answer)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/**
  * Matching pairs: tap a term on the left and its meaning on the right.
  * `onPair` reports every attempt (for the learning record and the sound);
  * `onDone` is called once all pairs are found, with the number of misses.
@@ -298,6 +360,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
   },
   bank: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, justifyContent: 'center' },
+  gap: { textDecorationLine: 'underline', fontWeight: 700 },
   columns: { flexDirection: 'row', gap: Spacing.three },
   column: { flex: 1, gap: Spacing.two },
 });

@@ -103,11 +103,18 @@ AI is used in three places, and only there:
 2. A lesson's content, once per lesson, with the small model, when the
    learner presses "Start lesson": an introduction of 3 to 5 cards (each one
    idea: a headline, one sentence and one example, to be taken in at a
-   glance; no running text), key points and 4 to 10 items. The items become cards and enter the normal daily reviews.
-3. Practice, on demand, with the small model: 5 to 8
-   questions (multiple choice, a typed answer, or, in language courses,
-   building a sentence from word tiles), chosen and graded in difficulty
-   from the learner's proficiency per item.
+   glance; no running text), key points, 4 to 10 items and 4 to 6 drills
+   (short sentence exercises with the new items, done at the end of the
+   guided run). The items become cards and enter the normal daily reviews.
+3. Practice, on demand, with the small model: 6 to 9 questions, chosen
+   and graded in difficulty from the learner's proficiency per item, and
+   written as sentences rather than single words. In a language course at
+   least two thirds are sentence building (word tiles, in both directions:
+   into the language being learned and back into the learner's language)
+   or gaps (a sentence with one gap and 3 or 4 candidates, with its
+   translation); multiple choice uses whole sentences too, and there is at
+   most one typed answer. Other courses use mostly gaps (a statement,
+   rule or formula with a gap) and multiple choice.
 
 Everything else is fixed code. A lesson is always the same template (goals,
 Learn, Practise, the lesson's items); the model only fills the slots.
@@ -117,13 +124,22 @@ The lesson page is a short overview. Learning and practising each open as a
 full-screen session that shows one page at a time, with a progress bar, a
 close button and a sound switch on top and the action at the bottom.
 
-The guided run shows one thing at a time: the introduction cards, then the
-new items in pairs, each pair followed by a quick check ("which one fits?",
-built in the app from the lesson's own items), and the key points as a
-recap. With "Auto sound" on, each page is read aloud by the device's
-text-to-speech, switching voice between the learner's language and the
-language being learned. The quick checks are a warm-up and are not stored;
-only practice answers and card reviews enter the learning record.
+The guided run is played like a game, one thing at a time: the
+introduction cards, then the new items in pairs, each pair followed by a
+quick exercise per item, built in the app from the lesson's own items.
+Its kind changes in turn: pick the meaning, pick the meaning only by ear
+(language courses), pick the term for a meaning. Then come the lesson's
+drills (sentence building and gaps; lessons prepared before drills
+existed get sentence building from the examples of their cards), the key
+points as a recap, and a result page with points, the best streak and
+confetti, from which practice starts directly. Exercises get the same
+feedback as in practice (sound, animation, "3 in a row"), and a combo
+counter shows answers right in a row. Every answer in the run is stored
+like a practice answer: it earns points, counts for the daily goal and
+for proficiency. With "Auto sound" on, each page is read aloud by the
+device's text-to-speech, switching voice between the learner's language
+and the language being learned; a prompt in the language being learned
+is read too, a translation never.
 
 A practice session opens with the lesson's items once more on one page
 (term and meaning; tap to hear), then goes straight to the exercises. The
@@ -247,7 +263,8 @@ letting users pick their model needs no change to screens or prompts.
   and a wrong answer earns none. A matched pair 2; a multiple choice, a
   listening choice or a flashcard that is only looked at (recognition,
   listening) 5; a typed answer
-  (in practice or on a flashcard) 10; a sentence built from word tiles 15.
+  (in practice or on a flashcard), a filled gap and an answer in a
+  conversation 10; a sentence built from word tiles 15.
   A flashcard earns its points unless it is rated "Again". The values live
   in one place, the database function `event_points`.
 - Daily goal: two goals, and reaching either one completes the day: a
