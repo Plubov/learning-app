@@ -14,6 +14,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { loadGoalStatus } from '@/lib/daily-goal';
 import { getDeviceId } from '@/lib/device-id';
 import { examSettings } from '@/lib/exam';
+import { useT } from '@/lib/i18n';
+import type { TextKey } from '@/lib/i18n/en';
 import { isDueInSession, withoutListening } from '@/lib/review-session';
 import {
   createScheduler,
@@ -30,15 +32,25 @@ import { supabase } from '@/lib/supabase';
 import { answersMatch, cleanText } from '@/lib/text';
 import { deviceTimeZone } from '@/lib/time-zone';
 
-const RATING_LABELS: Record<ReviewRating, string> = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' };
+const RATING_LABELS: Record<ReviewRating, TextKey> = {
+  1: 'review.again',
+  2: 'review.hard',
+  3: 'review.good',
+  4: 'review.easy',
+};
+/** The rating recorded for "I don't know". */
+const AGAIN: ReviewRating = 1;
 /** New words per deck added by "Learn more", beyond today's limit. */
 const STUDY_MORE_COUNT = 10;
 
 /** What is known once the answer side is showing. */
 type Revealed = {
   intervals: Record<ReviewRating, number>;
-  /** Production cards only: what was typed and whether it matched. */
-  typed: { value: string; correct: boolean } | null;
+  /**
+   * Production cards only: what was typed and whether it matched.
+   * `dontKnow`: "I don't know" was pressed instead of typing.
+   */
+  typed: { value: string; correct: boolean; dontKnow: boolean } | null;
 };
 
 /** What record_review returns (see count_activity in the points migration). */
@@ -49,6 +61,7 @@ type Celebration = { streak: number | null };
 
 export default function ReviewScreen() {
   const theme = useTheme();
+  const { t } = useT();
   // With a deck id only that deck is studied; without, all active decks.
   const { deckId } = useLocalSearchParams<{ deckId?: string }>();
   const [scheduler, setScheduler] = useState<Scheduler | null>(null);
@@ -191,7 +204,7 @@ export default function ReviewScreen() {
   if (!queue || !scheduler) {
     return (
       <Screen>
-        <ThemedText themeColor="textSecondary">Loading…</ThemedText>
+        <ThemedText themeColor="textSecondary">{t('common.loading')}</ThemedText>
       </Screen>
     );
   }
@@ -206,32 +219,30 @@ export default function ReviewScreen() {
     return (
       <View style={styles.fill}>
         <Screen>
-          <ThemedText type="subtitle">Done for now</ThemedText>
+          <ThemedText type="subtitle">{t('review.done')}</ThemedText>
           <ThemedText themeColor="textSecondary">
-            {doneCount === 0
-              ? 'No cards are due.'
-              : `You reviewed ${doneCount} cards and earned ⭐ ${points} points.`}
-            {moreNewAvailable && ' Today’s new words are done.'}
+            {doneCount === 0 ? t('review.noneDue') : t('review.summary', { n: doneCount, points })}
+            {moreNewAvailable && ` ${t('review.newDone')}`}
           </ThemedText>
           {skippedListening.length > 0 && (
             <>
               <ThemedText themeColor="textSecondary">
                 {skippedListening.length === 1
-                  ? '1 listening card is saved for your next session.'
-                  : `${skippedListening.length} listening cards are saved for your next session.`}
+                  ? t('review.listeningSaved1')
+                  : t('review.listeningSaved', { n: skippedListening.length })}
               </ThemedText>
               <Button
-                title="I can listen now"
+                title={t('review.canListen')}
                 variant="secondary"
                 onPress={listenAfterAll}
               />
             </>
           )}
           {moreNewAvailable && (
-            <Button title={`Learn ${STUDY_MORE_COUNT} more new words`} onPress={studyMore} />
+            <Button title={t('review.learnMore', { n: STUDY_MORE_COUNT })} onPress={studyMore} />
           )}
           <Button
-            title="Back to decks"
+            title={t('common.back')}
             variant={moreNewAvailable ? 'secondary' : 'primary'}
             onPress={() => router.back()}
           />
@@ -243,14 +254,19 @@ export default function ReviewScreen() {
 
   const isProduction = card.card_type === 'production';
   const isListening = card.card_type === 'listening';
-  /** Production and listening cards: the answer is typed in Hangul and checked. */
-  const typesAnswer = isProduction || isListening;
+  /**
+   * Only production cards (meaning → Korean) are typed and checked. A
+   * listening card asks for the meaning of what is heard and is self-graded,
+   * like recognition: typing what you hear would be the production card's
+   * task a second time.
+   */
+  const typesAnswer = isProduction;
 
   const listenButton = (large: boolean) => (
     <Pressable
       onPress={() => speakKorean(card.item.term)}
       accessibilityRole="button"
-      accessibilityLabel="Listen"
+      accessibilityLabel={t('review.listenButton')}
       hitSlop={Spacing.two}
       style={({ pressed }) => pressed && styles.dimmed}>
       <ThemedText style={large ? styles.listenLarge : styles.listen}>🔊</ThemedText>
@@ -259,19 +275,22 @@ export default function ReviewScreen() {
 
   const isKorean = card.item.target_lang === 'ko';
   const AnswerField = isKorean ? KoreanTextField : TextField;
-  let instruction = 'What does it mean?';
-  if (isProduction) instruction = isKorean ? 'Type it in Korean' : 'Type the term';
-  if (isListening) instruction = 'Type what you hear';
+  let instruction = t('review.whatMeans');
+  if (isProduction) instruction = t(isKorean ? 'review.typeKorean' : 'review.typeTerm');
+  if (isListening) instruction = t('review.listen');
 
   /** The scheduler for a card: its deck's exam settings when an exam is ahead. */
   const schedulerFor = (c: SessionCard) => examSchedulers[c.item.exam_date ?? ''] ?? scheduler;
 
-  function reveal() {
+  /** Shows the answer side; `dontKnow` when "I don't know" was pressed instead of typing. */
+  function reveal(dontKnow = false) {
     if (!scheduler || !card) return;
     setRevealed({
       intervals: previewIntervals(schedulerFor(card), card, new Date()),
       typed: typesAnswer
-        ? { value: cleanText(answer), correct: answersMatch(answer, card.item.term) }
+        ? dontKnow
+          ? { value: '', correct: false, dontKnow: true }
+          : { value: cleanText(answer), correct: answersMatch(answer, card.item.term), dontKnow: false }
         : null,
     });
   }
@@ -291,10 +310,12 @@ export default function ReviewScreen() {
       p_duration_ms: now.getTime() - shownAt,
       p_device_id: await getDeviceId(),
       p_time_zone: deviceTimeZone(),
-      // Recognition is self-graded: no typed answer, correctness not checked.
+      // Recognition and listening are self-graded: no typed answer, correctness not checked.
       ...(revealed.typed && {
         p_correct: revealed.typed.correct,
-        p_response: { type: 'text', value: revealed.typed.value },
+        p_response: revealed.typed.dontKnow
+          ? { type: 'dont_know' }
+          : { type: 'text', value: revealed.typed.value },
       }),
     });
     setSaving(false);
@@ -321,16 +342,19 @@ export default function ReviewScreen() {
       <Screen>
         <View style={styles.topRow}>
           <ThemedText type="small" themeColor="textSecondary">
-            {queue.length} left · ⭐ {points} · {instruction}
+            {t('review.left', { n: queue.length })} · ⭐ {points}
           </ThemedText>
           {autoplay !== null && (
             <Pressable onPress={toggleAutoplay} accessibilityRole="button" hitSlop={Spacing.two}>
               <ThemedText type="small" themeColor="textSecondary">
-                {autoplay ? 'Auto sound: on' : 'Auto sound: off'}
+                {t(autoplay ? 'review.autoOn' : 'review.autoOff')}
               </ThemedText>
             </Pressable>
           )}
         </View>
+        <ThemedText type="smallBold" style={styles.instruction}>
+          {instruction}
+        </ThemedText>
 
         <ThemedView type="backgroundElement" style={styles.card}>
           {isListening ? (
@@ -348,14 +372,19 @@ export default function ReviewScreen() {
               <ThemedText style={styles.prompt}>
                 {isProduction || isListening ? card.item.term : card.item.meaning}
               </ThemedText>
+              {/* The meaning is the answer; the Korean shows what was heard. */}
               {isListening && <ThemedText style={styles.meaning}>{card.item.meaning}</ThemedText>}
               {isProduction && isKorean && listenButton(false)}
               {revealed.typed && (
                 <ThemedText
                   style={{ color: revealed.typed.correct ? theme.tint : theme.danger }}>
-                  {revealed.typed.correct
-                    ? 'Correct'
-                    : `You typed: ${revealed.typed.value === '' ? '(nothing)' : revealed.typed.value}`}
+                  {revealed.typed.dontKnow
+                    ? t('review.notKnown')
+                    : revealed.typed.correct
+                      ? t('review.correct')
+                      : t('review.youTyped', {
+                          value: revealed.typed.value === '' ? t('ex.nothing') : revealed.typed.value,
+                        })}
                 </ThemedText>
               )}
               {card.item.notes && (
@@ -372,10 +401,10 @@ export default function ReviewScreen() {
         {!revealed && typesAnswer && (
           <AnswerField
             key={card.id} // a fresh, focused input for every card
-            placeholder={isKorean ? '한국어' : 'Your answer'}
+            placeholder={isKorean ? '한국어' : t('ex.yourAnswer')}
             value={answer}
             onChangeText={setAnswer}
-            onSubmitEditing={reveal}
+            onSubmitEditing={() => reveal()}
             autoFocus
             autoCapitalize="none"
             autoCorrect={false}
@@ -383,13 +412,24 @@ export default function ReviewScreen() {
           />
         )}
         {!revealed && (
-          <Button title={typesAnswer ? 'Check' : 'Show answer'} onPress={reveal} />
+          <Button
+            title={typesAnswer ? t('common.check') : t('review.showAnswer')}
+            onPress={() => reveal()}
+          />
+        )}
+        {!revealed && typesAnswer && (
+          <Button title={t('review.dontKnow')} variant="secondary" onPress={() => reveal(true)} />
         )}
         {!revealed && isListening && (
-          <Button title="Can’t listen right now" variant="secondary" onPress={skipListening} />
+          <Button title={t('review.cantListen')} variant="secondary" onPress={skipListening} />
         )}
 
-        {revealed && (
+        {/* Not known: nothing to weigh up, so one button that records "Again". */}
+        {revealed?.typed?.dontKnow && (
+          <Button title={t('common.continue')} onPress={() => rate(AGAIN)} busy={saving} />
+        )}
+
+        {revealed && !revealed.typed?.dontKnow && (
           <View style={styles.ratings}>
             {REVIEW_RATINGS.map((rating) => (
               <Pressable
@@ -403,7 +443,7 @@ export default function ReviewScreen() {
                   (saving || pressed) && styles.dimmed,
                 ]}>
                 <ThemedText type="smallBold" style={rating === 1 && { color: theme.danger }}>
-                  {RATING_LABELS[rating]}
+                  {t(RATING_LABELS[rating])}
                 </ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {formatInterval(revealed.intervals[rating])}
@@ -434,6 +474,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
   },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  instruction: { textAlign: 'center' },
   listen: { fontSize: 28, lineHeight: 36 },
   listenLarge: { fontSize: 64, lineHeight: 80 },
   meaning: { fontSize: 20, lineHeight: 28, textAlign: 'center' },

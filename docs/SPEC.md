@@ -48,7 +48,9 @@ Starting point: learner reads Hangul, knows a little basic vocabulary.
 
 Card types:
 - Recognition: Korean shown, recall the meaning.
-- Production: meaning shown, type the Korean in Hangul. On the web (a
+- Production: meaning shown, type the Korean in Hangul, or press
+  "I don't know": the answer is shown and one "Continue" records the
+  card as "Again", so it comes back later in the session. On the web (a
   computer usually has no Korean keyboard installed) Korean fields type
   Hangul from the Latin keys in the standard two-set layout (r = ㄱ, k = ㅏ)
   and show an on-screen Korean keyboard; "한 → A" switches to Latin letters.
@@ -56,7 +58,10 @@ Card types:
   layout matters: US (QWERTY) or German (QWERTZ, Z and Y swapped). Chosen
   per device, first guessed from the browser language.
   Phones and tablets use their own Korean keyboard.
-- Listening: Korean spoken by device text-to-speech, recall the meaning.
+- Listening: Korean spoken by device text-to-speech, recall the meaning,
+  then "Show answer" (Korean and meaning) and rate it, like recognition.
+  It is not typed: typing what is heard would repeat the production
+  card, which is the only flashcard with a typed answer.
   "Can't listen right now" on a listening card takes all listening cards out
   of the current session without recording anything, so they stay due and
   come back in the next session ("I can listen now" at the end of the
@@ -240,7 +245,8 @@ letting users pick their model needs no change to screens or prompts.
 
 - Points: every answer earns points by how hard its kind of exercise is,
   and a wrong answer earns none. A matched pair 2; a multiple choice, a
-  listening choice or a flashcard that is only looked at 5; a typed answer
+  listening choice or a flashcard that is only looked at (recognition,
+  listening) 5; a typed answer
   (in practice or on a flashcard) 10; a sentence built from word tiles 15.
   A flashcard earns its points unless it is rated "Again". The values live
   in one place, the database function `event_points`.

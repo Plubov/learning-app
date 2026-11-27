@@ -42,7 +42,7 @@ Project:
 - [x] Import from a RemNote export file
 - [x] Learning order for new words: topics mixed, phrases after their words
 - [x] Korean read aloud with device text-to-speech
-- [x] Listening cards (hear the word, then answer)
+- [x] Listening cards (hear the word, recall the meaning; not typed)
 - [x] Daily cap for new items, with "Learn more"
 - [x] Simple statistics screen
 

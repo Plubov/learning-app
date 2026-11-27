@@ -143,6 +143,16 @@ begin
     raise exception 'FAIL: record_review did not mark the item introduced';
   end if;
 
+  -- Flashcard points: listening is self-graded (5), a typed listening review
+  -- from before 2026-11-27 keeps 10, recognition is 5 even with an answer.
+  if public.event_points('listening', null, 3::smallint, null) <> 5
+     or public.event_points('listening', null, 3::smallint, false) <> 10
+     or public.event_points('recognition', null, 3::smallint, true) <> 5
+     or public.event_points('production', null, 3::smallint, true) <> 10
+     or public.event_points('production', null, 1::smallint, true) <> 0 then
+    raise exception 'FAIL: event_points gives wrong flashcard points';
+  end if;
+
   -- B cannot review the card of A.
   begin
     perform public.record_review(
