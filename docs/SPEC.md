@@ -178,6 +178,29 @@ lessons are finished; until it is done it is the next step of the course
 next lesson, also when later lessons were done first. Its answers are
 stored like practice answers. Rules: `src/lib/review-stops.ts`.
 
+Conversations (language courses): the lesson page offers a conversation
+next to Learn and Practise. AI writes it once, on demand, with the small
+model (a fourth use, like practice): an everyday situation, who the
+learner talks to, and 4 to 6 turns, each with the partner's line, its
+translation, 1 to 3 short answers that fit and a hint in the learner's
+language. It is kept until the learner asks for a new one. In the
+session the partner's line is read aloud and shown (translation and hint
+on request); the learner answers by speaking or typing, and earlier turns
+stay on screen as chat bubbles. The app checks the answer itself
+(`src/lib/talk.ts`): spaces and punctuation are ignored, Korean is
+compared letter by letter (jamo), and an answer at least 75 % like one of
+the answers counts as right, so a misheard sound does not fail it. A wrong
+answer may be tried once more; "I don't know" shows the answer. Answers
+are stored like practice answers (exercise "talk", `response.type`
+"speech" or "text") and earn 10 points.
+
+Speech recognition: Expo has no module for it and Expo Go cannot load
+one, so speaking works in the web version, with the browser's own
+recognition (Chrome and Edge on computers and Android, Safari; it needs a
+connection, and the browser asks once for the microphone). In the phone
+app and in browsers without it, answers are typed. A development build
+with a recognition package would bring it to the phone app later.
+
 The app has four tabs at the bottom, from left to right; it opens on Home:
 
 - Stats has the statistics and the daily goals.

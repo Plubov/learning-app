@@ -6,12 +6,14 @@ import { Button } from '@/components/button';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { PracticeSession } from '@/components/session/practice-session';
+import { TalkSession } from '@/components/session/talk-session';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
-import { generatePractice, prepareLesson } from '@/lib/ai';
+import { generatePractice, prepareConversation, prepareLesson } from '@/lib/ai';
+import type { StoredConversation } from '@/lib/course-content';
 import { loadLessonDetail, markLessonLearned, type LessonDetail } from '@/lib/courses';
 import { buildExercises } from '@/lib/exercises';
 import { useT } from '@/lib/i18n';
@@ -35,9 +37,10 @@ type View_ =
       lang: string | null;
       /** Practice only: finishing it completes the lesson for the first time. */
       completesLesson: boolean;
-    };
+    }
+  | { kind: 'talk'; key: number; conversation: StoredConversation };
 
-type Working = 'prepare' | 'practice' | null;
+type Working = 'prepare' | 'practice' | 'talk' | null;
 
 /**
  * A lesson. The template is the same for every lesson:
@@ -95,14 +98,20 @@ export default function LessonScreen() {
     });
   }
 
+  function openTalk(from: LessonDetail) {
+    if (!from.conversation) return;
+    setView({ kind: 'talk', key: new Date().getTime(), conversation: from.conversation });
+  }
+
   /** Runs an AI task, then opens the session it was for with the fresh lesson. */
-  async function runAi(kind: 'prepare' | 'practice', call: () => Promise<void>) {
+  async function runAi(kind: 'prepare' | 'practice' | 'talk', call: () => Promise<void>) {
     setWorking(kind);
     setAiError(null);
     try {
       await call();
       const fresh = await loadLessonDetail(lessonId);
       if (kind === 'prepare') openLearn(fresh);
+      else if (kind === 'talk') openTalk(fresh);
       else openPractice(fresh);
       setReload((n) => n + 1);
     } catch (reason) {
@@ -114,6 +123,10 @@ export default function LessonScreen() {
   function newPractice(from: LessonDetail) {
     const proficiency = Object.fromEntries(from.items.map((item) => [item.id, item.proficiency]));
     runAi('practice', () => generatePractice(from.id, proficiency));
+  }
+
+  function newTalk(from: LessonDetail) {
+    runAi('talk', () => prepareConversation(from.id));
   }
 
   async function practiceFinished() {
@@ -224,6 +237,39 @@ export default function LessonScreen() {
     );
   }
 
+  if (view.kind === 'talk' && lesson.targetLang) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <TalkSession
+          key={view.key}
+          lessonId={lesson.id}
+          conversation={view.conversation}
+          targetLang={lesson.targetLang}
+          onFinished={() => setReload((n) => n + 1)}
+          resultFooter={
+            <>
+              {aiError && <ThemedText style={{ color: theme.danger }}>{aiError}</ThemedText>}
+              {working === 'talk' && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('talk.writing')}
+                </ThemedText>
+              )}
+              <Button title={t('common.continue')} tone="success" onPress={closeSession} disabled={working === 'talk'} />
+              <Button
+                title={t('talk.again')}
+                variant="secondary"
+                onPress={() => newTalk(lesson)}
+                busy={working === 'talk'}
+              />
+            </>
+          }
+          onClose={closeSession}
+        />
+      </>
+    );
+  }
+
   const stepCount = lesson.explanation ? explanationSteps(lesson.explanation).steps.length : 0;
   return (
     <Screen>
@@ -287,6 +333,17 @@ export default function LessonScreen() {
               lesson.practice && !lesson.completed ? openPractice(lesson) : newPractice(lesson)
             }
           />
+          {lesson.targetLang && (
+            <ActionCard
+              icon="🗣️"
+              title={t('talk.title')}
+              subtitle={working === 'talk' ? t('talk.writing') : t('talk.sub')}
+              busy={working === 'talk'}
+              disabled={working !== null}
+              // The conversation already written is kept until a new one is asked for.
+              onPress={() => (lesson.conversation ? openTalk(lesson) : newTalk(lesson))}
+            />
+          )}
 
           <View style={styles.section}>
             <ThemedText type="smallBold">{t('lesson.inThis')}</ThemedText>

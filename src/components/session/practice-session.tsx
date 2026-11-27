@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Animated, Pressable, StyleSheet, Vibration, View } from 'react-native';
+import { Pressable, StyleSheet, Vibration, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { GoalCelebration } from '@/components/goal-celebration';
@@ -13,6 +13,7 @@ import {
 } from '@/components/session/exercises';
 import { FeedbackBar } from '@/components/session/feedback-bar';
 import { Appear, usePop } from '@/components/session/motion';
+import { ResultSummary } from '@/components/session/result-summary';
 import { SessionLayout } from '@/components/session/session-layout';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -275,27 +276,13 @@ export function PracticeSession({
           onToggleSound={toggleSound}
           onClose={onClose}
           footer={resultFooter}>
-          <View style={styles.result}>
-            <Animated.Text style={[styles.trophy, { transform: [{ scale }] }]}>
-              {perfect ? '🏆' : '🎉'}
-            </Animated.Text>
-            <ThemedText type="subtitle" style={styles.center}>
-              {resultTitle}
-            </ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.center}>
-              {perfect ? t('session.allRight') : resultText}
-            </ThemedText>
-            <View style={styles.stats}>
-              {stats.map((stat) => (
-                <ThemedView key={stat.label} type="backgroundElement" style={styles.stat}>
-                  <ThemedText style={styles.statValue}>{stat.value}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {stat.label}
-                  </ThemedText>
-                </ThemedView>
-              ))}
-            </View>
-          </View>
+          <ResultSummary
+            perfect={perfect}
+            title={resultTitle}
+            text={perfect ? t('session.allRight') : resultText}
+            stats={stats}
+            scale={scale}
+          />
         </SessionLayout>
         <Confetti />
         {goalReached && <GoalCelebration streak={null} onDone={endCelebration} />}
@@ -558,10 +545,4 @@ const styles = StyleSheet.create({
   point: { fontSize: 17, lineHeight: 26 },
   listen: { alignSelf: 'flex-start' },
   listenIcon: { fontSize: 24, lineHeight: 32 },
-  result: { alignItems: 'center', gap: Spacing.three },
-  trophy: { fontSize: 88, lineHeight: 104 },
-  center: { textAlign: 'center' },
-  stats: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
-  stat: { flex: 1, alignItems: 'center', padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.one },
-  statValue: { fontSize: 22, lineHeight: 30, fontWeight: 700 },
 });
