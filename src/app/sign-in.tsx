@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/button';
@@ -12,6 +12,17 @@ import { supabase } from '@/lib/supabase';
 import { useT } from '@/lib/i18n';
 
 type Message = { kind: 'error' | 'info'; text: string };
+
+/**
+ * Where the link in the confirmation email leads: this web app (the
+ * address it runs at), or the published one when signing up on a phone.
+ * Supabase confirms the address before it redirects; the address must be
+ * in the project's allowed redirect URLs (auth settings).
+ */
+const CONFIRMED_URL =
+  Platform.OS === 'web' && typeof window !== 'undefined'
+    ? window.location.origin
+    : 'https://learning-app-plubub.expo.app';
 
 export default function SignInScreen() {
   const theme = useTheme();
@@ -33,7 +44,12 @@ export default function SignInScreen() {
     if (error) {
       setMessage({
         kind: 'error',
-        text: error.code === 'invalid_credentials' ? t('signIn.invalid') : error.message,
+        text:
+          error.code === 'invalid_credentials'
+            ? t('signIn.invalid')
+            : error.code === 'email_not_confirmed'
+              ? t('signIn.notConfirmed')
+              : error.message,
       });
     }
   }
@@ -41,7 +57,11 @@ export default function SignInScreen() {
   async function signUp() {
     setBusy(true);
     setMessage(null);
-    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: CONFIRMED_URL },
+    });
     setBusy(false);
     if (error) {
       setMessage({

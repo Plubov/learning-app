@@ -83,8 +83,14 @@ guidance (always read the versioned Expo docs, not memory).
   values from `.env` and deploys to EAS Hosting as production). Either way
   the address is https://learning-app-plubub.expo.app; Expo project
   `@plubub/learning-app`, the CLI needs `npx eas-cli@latest login` once per
-  machine. New sign-ups are switched off in Supabase Auth, because the
-  address is public.
+  machine. Anyone can create an account there; the confirmation email is
+  sent through the SMTP sender set in Supabase (Authentication → Emails).
+- Auth settings of the cloud project (sign-up, site URL, redirect URLs):
+  never push the repository's `supabase/config.toml`, which holds local
+  test values. Copy the `supabase/` folder elsewhere, run
+  `npx supabase config pull --workdir <copy>`, change the value there,
+  check with `config diff --workdir <copy>`, then
+  `config push --workdir <copy> --yes`.
 - Cloud sessions (claude.ai/code, the Claude phone app): the SessionStart
   hook in `.claude/settings.json` runs `scripts/cloud-session-setup.sh`,
   which installs the npm packages there. Database migrations, Supabase
@@ -112,7 +118,11 @@ guidance (always read the versioned Expo docs, not memory).
   deploy with `npx supabase functions deploy ai`
 - AI secrets (server only, never in `.env`):
   `npx supabase secrets set ANTHROPIC_API_KEY=...`; optional
-  `AI_MODEL_PLAN`, `AI_MODEL_LIGHT`, `AI_DAILY_CALLS`, `AI_DAILY_PLANS`
+  `AI_MODEL_PLAN`, `AI_MODEL_LIGHT`; limits per 24 hours: `AI_OWNER_IDS`
+  (the owner's user ids, comma-separated) get `AI_DAILY_CALLS` (150) and
+  `AI_DAILY_PLANS` (10), every other account `AI_DAILY_CALLS_OTHERS` (40)
+  and `AI_DAILY_PLANS_OTHERS` (3), all other accounts together
+  `AI_DAILY_CALLS_TOTAL` (400)
 - One-time setup per machine: `npx supabase login`, then
   `npx supabase link --project-ref kwyrtvjirgqzzxzdxpqu` (asks for the
   database password)

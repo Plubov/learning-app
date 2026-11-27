@@ -180,6 +180,7 @@ export const es: Record<TextKey, string> = {
   'tabs.stats': 'Estadísticas',
   'settings.title': 'Ajustes',
   'settings.account': 'Cuenta',
+  'signIn.notConfirmed': 'Primero confirma tu correo: abre el enlace del correo que te enviamos y luego inicia sesión aquí.',
   'voices.androidWebTitle': 'En Chrome para Android, el teléfono elige la voz',
   'voices.androidWeb': 'El navegador ofrece una voz por idioma: la configurada en el teléfono. Para cambiarla, abre Ajustes del teléfono → Sistema → Idiomas → Salida de texto a voz, toca el engranaje junto al motor (Servicios de voz de Google), luego Instalar datos de voz → el idioma, y elige una voz. Después recarga esta página.',
   'talk.title': 'Conversación',

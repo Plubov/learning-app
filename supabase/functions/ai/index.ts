@@ -84,9 +84,23 @@ import {
 type Context = SupabaseContext;
 type Body = Record<string, unknown>;
 
-/** Per user and 24 hours. The server's key is shared, so one account cannot spend without limit. */
+/**
+ * Limits per 24 hours. The server's key is shared, so no account can spend
+ * without limit. The owner's accounts (secret AI_OWNER_IDS: user ids,
+ * separated by commas) get the larger limits; every other account the
+ * smaller ones, and all other accounts together stop at the total. The
+ * owner is never stopped by the total. Without AI_OWNER_IDS every account
+ * gets the smaller limits.
+ */
+const OWNER_IDS = (Deno.env.get('AI_OWNER_IDS') ?? '')
+  .split(',')
+  .map((id) => id.trim())
+  .filter((id) => id !== '');
 const DAILY_CALLS = Number(Deno.env.get('AI_DAILY_CALLS') ?? 150);
 const DAILY_PLANS = Number(Deno.env.get('AI_DAILY_PLANS') ?? 10);
+const OTHER_DAILY_CALLS = Number(Deno.env.get('AI_DAILY_CALLS_OTHERS') ?? 40);
+const OTHER_DAILY_PLANS = Number(Deno.env.get('AI_DAILY_PLANS_OTHERS') ?? 3);
+const TOTAL_DAILY_CALLS = Number(Deno.env.get('AI_DAILY_CALLS_TOTAL') ?? 400);
 const CHAT_HISTORY = 20;
 
 function json(body: unknown, status = 200): Response {
@@ -118,13 +132,23 @@ function userId(ctx: Context): string {
   return id;
 }
 
-async function usageSince(ctx: Context, task?: string): Promise<number> {
+/** Whether the caller is one of the owner's accounts (larger limits). */
+function isOwner(ctx: Context): boolean {
+  return OWNER_IDS.includes(userId(ctx));
+}
+
+/**
+ * AI calls in the last 24 hours: of this user (optionally of one task), or,
+ * with `others`, of every account except the owner's.
+ */
+async function usageSince(ctx: Context, task?: string, others = false): Promise<number> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   let query = ctx.supabaseAdmin
     .from('ai_usage')
     .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId(ctx))
     .gte('created_at', since);
+  if (!others) query = query.eq('user_id', userId(ctx));
+  else if (OWNER_IDS.length > 0) query = query.not('user_id', 'in', `(${OWNER_IDS.join(',')})`);
   if (task) query = query.eq('task', task);
   const { count, error } = await query;
   if (error) throw new AiError(`Database error (usage): ${error.message}`, 500);
@@ -386,7 +410,7 @@ async function lessonMaterial(
 
 async function planCourse(ctx: Context, body: Body): Promise<void> {
   const course = await loadCourse(ctx, uuid(body.courseId, 'courseId'));
-  if ((await usageSince(ctx, 'plan_course')) >= DAILY_PLANS) {
+  if ((await usageSince(ctx, 'plan_course')) >= (isOwner(ctx) ? DAILY_PLANS : OTHER_DAILY_PLANS)) {
     throw new AiError('The daily limit for course plans is reached. Try again tomorrow.', 429);
   }
   const material = await courseMaterial(ctx, course);
@@ -871,8 +895,11 @@ const handle = withSupabase({ auth: 'user' }, async (req, ctx) => {
     task = typeof body?.task === 'string' ? body.task : 'unknown';
     const run = TASKS[task];
     if (!body || !run) throw new AiError('Unknown task', 400);
-    if ((await usageSince(ctx)) >= DAILY_CALLS) {
+    if ((await usageSince(ctx)) >= (isOwner(ctx) ? DAILY_CALLS : OTHER_DAILY_CALLS)) {
       throw new AiError('The daily AI limit is reached. Try again tomorrow.', 429);
+    }
+    if (!isOwner(ctx) && (await usageSince(ctx, undefined, true)) >= TOTAL_DAILY_CALLS) {
+      throw new AiError('The AI is busy for today. Try again tomorrow.', 429);
     }
     await run(ctx, body);
     return json({ ok: true });

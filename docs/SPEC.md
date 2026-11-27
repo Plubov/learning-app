@@ -287,8 +287,11 @@ The user picks connection and model in settings. One tested default model is
 recommended. The app works without AI for plain reviewing.
 
 Current state: one connection only. The server holds a single provider key as
-an Edge Function secret, used for every account, with a daily limit of AI
-calls per user. Code asks for a tier ('plan' = strong model, 'light' = small
+an Edge Function secret, used for every account, with limits per 24 hours:
+the owner's account 150 AI calls and 10 course plans, every other account
+40 calls and 3 plans, and all other accounts together 400 calls (the
+owner is never stopped by that total). Anyone can create an account on
+the web address and confirms it by email. Code asks for a tier ('plan' = strong model, 'light' = small
 model), never for a model; which model a tier means is decided in one place
 on the server (today from secrets, later from the user's own choice), so
 letting users pick their model needs no change to screens or prompts.

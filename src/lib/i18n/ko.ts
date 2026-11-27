@@ -180,6 +180,7 @@ export const ko: Record<TextKey, string> = {
   'tabs.stats': '통계',
   'settings.title': '설정',
   'settings.account': '계정',
+  'signIn.notConfirmed': '먼저 이메일 주소를 확인해 주세요. 보내 드린 이메일의 링크를 연 뒤 여기서 로그인하세요.',
   'voices.androidWebTitle': 'Android의 Chrome에서는 휴대폰이 음성을 정해요',
   'voices.androidWeb': '브라우저는 언어마다 휴대폰에 설정된 음성 하나만 써요. 바꾸려면 휴대폰 설정 → 시스템 → 언어 → 텍스트 음성 변환 출력에서 음성 엔진(Google 음성 서비스) 옆 톱니바퀴 → 음성 데이터 설치 → 언어를 눌러 음성을 고르세요. 그다음 이 페이지를 새로고침하세요.',
   'talk.title': '대화',
