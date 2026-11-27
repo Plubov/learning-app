@@ -383,8 +383,9 @@ and practice sessions. Still in
 English: review, statistics, decks, import, sign-in, tutor chat, material
 and homework screens, and error messages.
 
-Voice: study courses are read in a calmer voice (slower and lower) than
-guided courses.
+Voice: study courses are read a little slower than guided courses.
+Only the speed changes, never the pitch, which makes natural voices
+sound strained.
 
 What is read aloud: explanations (lesson steps, recap) are read; translations
 of words and of example sentences are not. In a Korean course the text is
@@ -393,3 +394,14 @@ everything else the voice of the learner's language, whatever the AI
 labelled. Blanks and
 grammar marks (`__`, `~`, a leading `-`) are never read. The voice per
 language can be chosen on the voices screen.
+
+Voices: the device's own voices (no cost). When the learner has not
+picked one, the standard voice of the language is used if the device
+has it: Google's KOD (Korean), DEB (German), TPD (English) and EFF
+(Spanish), as on Android (`STANDARD_VOICES` in `speech-text.ts`).
+Otherwise natural-sounding voices are chosen. They are
+listed first and marked: "Enhanced" voices on iOS and Android, and the browser's
+online voices on the web (Microsoft's "Natural" voices in Edge,
+Google's in Chrome). Browsers announce their online voices a moment
+after the page loads, so the list is loaded again when they arrive.
+Without a natural voice the screen says where to get one.

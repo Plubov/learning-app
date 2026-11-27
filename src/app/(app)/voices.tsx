@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -10,6 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { APP_LANGUAGES, LANGUAGE_NAMES, useT, type AppLanguage } from '@/lib/i18n';
 import {
   getChosenVoice,
+  onVoicesChanged,
   setChosenVoice,
   speakSegments,
   stopSpeaking,
@@ -39,13 +40,18 @@ type LanguageVoices = {
 /**
  * Choosing the voice per language: the languages being learned (Korean),
  * the app's language and the other languages lessons can be written in.
- * Tapping a voice plays a sample with it, at the speed and pitch lessons
- * use, and makes it the voice for that language from then on.
+ * Natural-sounding voices come first and are marked. Tapping a voice plays
+ * a sample with it, at the speed lessons use, and makes it the voice for
+ * that language from then on.
  */
 export default function VoicesScreen() {
   const theme = useTheme();
   const { t, language } = useT();
   const [groups, setGroups] = useState<LanguageVoices[] | null>(null);
+  // Increased when the browser reports more voices (its natural online ones arrive late).
+  const [voiceVersion, setVoiceVersion] = useState(0);
+
+  useEffect(() => onVoicesChanged(() => setVoiceVersion((n) => n + 1)), []);
 
   useEffect(() => {
     let active = true;
@@ -72,9 +78,15 @@ export default function VoicesScreen() {
     });
     return () => {
       active = false;
-      stopSpeaking();
     };
-  }, [language]);
+  }, [language, voiceVersion]);
+
+  useEffect(
+    () => () => {
+      stopSpeaking(); // no voice after leaving the screen
+    },
+    [],
+  );
 
   async function choose(lang: string, identifier: string | null, learned: boolean) {
     await setChosenVoice(lang, identifier).catch(() => {});
@@ -86,7 +98,7 @@ export default function VoicesScreen() {
         text: SAMPLES[lang] ?? SAMPLES.en,
         lang,
         // The sample sounds exactly as lessons will: a language being learned
-        // slower, the others at the lively speed and pitch.
+        // slower, the others at the usual, slightly brisker speed.
         slow: learned,
         ...(identifier && { voice: identifier }),
       },
@@ -109,29 +121,40 @@ export default function VoicesScreen() {
               {t('voices.none')}
             </ThemedText>
           ) : (
-            [{ identifier: null, name: t('voices.auto'), enhanced: false }, ...group.voices].map(
-              (voice) => {
-                const selected = group.chosen === voice.identifier;
-                return (
-                  <Pressable
-                    key={voice.identifier ?? 'auto'}
-                    onPress={() => choose(group.lang, voice.identifier, group.learned)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}>
-                    <ThemedView
-                      type={selected ? 'tintSoft' : 'backgroundElement'}
-                      style={[styles.voice, { borderColor: selected ? theme.tint : 'transparent' }]}>
-                      <ThemedText style={styles.grow} numberOfLines={2}>
-                        {selected ? '✓ ' : ''}
-                        {voice.name}
-                        {voice.enhanced ? ' ✨' : ''}
-                      </ThemedText>
-                      <ThemedText style={styles.play}>▶</ThemedText>
-                    </ThemedView>
-                  </Pressable>
-                );
-              },
-            )
+            <>
+              {!group.voices.some((voice) => voice.natural) && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t(Platform.OS === 'web' ? 'voices.noNaturalWeb' : 'voices.noNaturalPhone')}
+                </ThemedText>
+              )}
+              {[{ identifier: null, name: t('voices.auto'), natural: false }, ...group.voices].map(
+                (voice) => {
+                  const selected = group.chosen === voice.identifier;
+                  return (
+                    <Pressable
+                      key={voice.identifier ?? 'auto'}
+                      onPress={() => choose(group.lang, voice.identifier, group.learned)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}>
+                      <ThemedView
+                        type={selected ? 'tintSoft' : 'backgroundElement'}
+                        style={[styles.voice, { borderColor: selected ? theme.tint : 'transparent' }]}>
+                        <ThemedText style={styles.grow} numberOfLines={2}>
+                          {selected ? '✓ ' : ''}
+                          {voice.name}
+                        </ThemedText>
+                        {voice.natural && (
+                          <ThemedText type="small" style={[styles.badge, { color: theme.tint }]}>
+                            ✨ {t('voices.natural')}
+                          </ThemedText>
+                        )}
+                        <ThemedText style={styles.play}>▶</ThemedText>
+                      </ThemedView>
+                    </Pressable>
+                  );
+                },
+              )}
+            </>
           )}
         </View>
       ))}
@@ -152,4 +175,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   play: { fontSize: 16, lineHeight: 24 },
+  badge: { fontWeight: 600 },
 });

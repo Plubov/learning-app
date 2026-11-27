@@ -3,25 +3,90 @@
  * unit tested). The speaking itself is in speech.ts.
  */
 
-export type VoiceInfo = { identifier: string; language: string; quality: string };
+/** A voice as expo-speech lists it; `localService` is only known on the web. */
+export type VoiceInfo = {
+  identifier: string;
+  name?: string;
+  language: string;
+  quality: string;
+  /** Web: false for the browser's online voices (Google's in Chrome, Microsoft's "Natural" ones in Edge). */
+  localService?: boolean;
+};
 
-/**
- * The best voice in the list for a language ('ko', 'en', ...), or null if
- * there is none. Prefers "Enhanced" quality voices (larger, more natural
- * ones on iOS).
- */
-export function pickVoice(voices: readonly VoiceInfo[], lang: string): string | null {
+/** A voice as the voices screen shows it. */
+export type VoiceOption = { identifier: string; name: string; natural: boolean };
+
+function speaks(voice: VoiceInfo, lang: string): boolean {
   const code = lang.toLowerCase();
-  const matching = voices.filter((v) => {
-    const language = v.language.replace('_', '-').toLowerCase();
-    return language === code || language.startsWith(`${code}-`);
-  });
-  const enhanced = matching.find((v) => v.quality === 'Enhanced');
-  return (enhanced ?? matching[0])?.identifier ?? null;
+  const language = voice.language.replace('_', '-').toLowerCase();
+  return language === code || language.startsWith(`${code}-`);
 }
 
-export function pickKoreanVoice(voices: readonly VoiceInfo[]): string | null {
-  return pickVoice(voices, 'ko');
+/**
+ * Whether a voice is one of the natural-sounding (neural) ones rather than
+ * an older, robotic one. Devices say so in different ways:
+ *   - iOS and Android: quality "Enhanced";
+ *   - browsers report no quality, but their natural voices are online ones
+ *     (`localService` false): "Google 한국의" in Chrome, "Microsoft SunHi
+ *     Online (Natural)" in Edge;
+ *   - otherwise the name or identifier says it: "(Natural)", "(Premium)",
+ *     "(Enhanced)" (Safari), "-network" (Android's online Google voices).
+ */
+export function isNaturalVoice(voice: VoiceInfo): boolean {
+  if (voice.quality === 'Enhanced' || voice.localService === false) return true;
+  return (
+    /\((natural|neural|premium|enhanced)\)|\bonline\b/i.test(voice.name ?? '') ||
+    /-network$/i.test(voice.identifier)
+  );
+}
+
+/**
+ * A short, readable name for a voice:
+ *   "Microsoft SunHi Online (Natural) - Korean (Korea)" → "SunHi",
+ *   "ko-kr-x-ism-network" (Android) → "Google ISM (online)",
+ *   "Yuna (Enhanced)" → "Yuna". Quality is shown separately.
+ */
+export function voiceName(voice: VoiceInfo): string {
+  const name = voice.name || voice.identifier;
+  const microsoft = name.match(/^Microsoft\s+(.+?)(?:\s+Desktop)?(?:\s+Online)?(?:\s+\([^)]*\))?\s+-\s+/);
+  if (microsoft) return microsoft[1];
+  const android = name.match(/^[a-z]{2,3}-[a-z]{2}-x-([a-z0-9]+)-(local|network)$/i);
+  if (android) return `Google ${android[1].toUpperCase()}${android[2] === 'network' ? ' (online)' : ''}`;
+  return name.replace(/\s+\((enhanced|premium|natural)\)$/i, '').trim();
+}
+
+/** The voices of one language ('ko', 'en', ...): natural ones first, then by name, each voice once. */
+export function voiceOptions(voices: readonly VoiceInfo[], lang: string): VoiceOption[] {
+  const seen = new Set<string>();
+  return voices
+    .filter((voice) => {
+      if (!speaks(voice, lang) || seen.has(voice.identifier)) return false;
+      seen.add(voice.identifier);
+      return true;
+    })
+    .map((voice) => ({ identifier: voice.identifier, name: voiceName(voice), natural: isNaturalVoice(voice) }))
+    .sort((a, b) => Number(b.natural) - Number(a.natural) || a.name.localeCompare(b.name));
+}
+
+/**
+ * The standard voice per language where the device has it: Google's voices
+ * on Android, chosen by the owner (shown as "Google KOD" and so on; the
+ * identifiers look like "ko-kr-x-kod-local").
+ */
+export const STANDARD_VOICES: Record<string, string> = { ko: 'kod', de: 'deb', en: 'tpd', es: 'eff' };
+
+/**
+ * The voice the app picks for a language: the standard voice if the device
+ * has it (the one on the device before the online one), else a natural one,
+ * else any. Null if there is none at all.
+ */
+export function pickVoice(voices: readonly VoiceInfo[], lang: string): string | null {
+  const options = voiceOptions(voices, lang);
+  const standard = STANDARD_VOICES[lang.toLowerCase()];
+  const named = (suffix: string) =>
+    options.find((option) => option.identifier.toLowerCase().endsWith(`-x-${standard}-${suffix}`));
+  const preferred = standard ? (named('local') ?? named('network')) : undefined;
+  return (preferred ?? options[0])?.identifier ?? null;
 }
 
 /**
