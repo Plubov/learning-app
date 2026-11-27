@@ -14,6 +14,7 @@ import { askTutor, planCourse } from '@/lib/ai';
 import { LIMITS } from '@/lib/course-content';
 import { supabase } from '@/lib/supabase';
 import { cleanText } from '@/lib/text';
+import { useT } from '@/lib/i18n';
 
 /** The newest messages shown; older ones stay stored. */
 const SHOWN_MESSAGES = 100;
@@ -26,6 +27,7 @@ const SHOWN_MESSAGES = 100;
 export default function CourseChatScreen() {
   const { courseId } = useLocalSearchParams<{ courseId: string }>();
   const theme = useTheme();
+  const { t } = useT();
   const [reload, setReload] = useState(0);
   const [text, setText] = useState('');
   const [pending, setPending] = useState<string | null>(null); // sent, reply not here yet
@@ -105,8 +107,7 @@ export default function CourseChatScreen() {
       {loadError && <ThemedText style={{ color: theme.danger }}>{loadError}</ThemedText>}
       {messages?.length === 0 && pending === null && (
         <ThemedText themeColor="textSecondary">
-          Ask anything about this course, or say what you would like to change about the plan:
-          the goal, the pace, the order, or topics to add or drop.
+          {t('chat.empty')}
         </ThemedText>
       )}
 
@@ -121,11 +122,11 @@ export default function CourseChatScreen() {
             (applied === message.id ||
             (plannedAt !== null && Date.parse(message.created_at) < plannedAt) ? (
               <ThemedText type="small" themeColor="textSecondary">
-                The plan was updated after this suggestion. Lessons you already started were kept.
+                {t('chat.updated')}
               </ThemedText>
             ) : (
               <Button
-                title="Update the plan"
+                title={t('chat.update')}
                 onPress={() => applyPlanChange(message.id, message.plan_change ?? '')}
                 busy={applying === message.id}
                 disabled={applying !== null}
@@ -142,30 +143,30 @@ export default function CourseChatScreen() {
       )}
       {pending !== null && (
         <ThemedText type="small" themeColor="textSecondary">
-          The tutor is writing…
+          {t('chat.writing')}
         </ThemedText>
       )}
       {applying !== null && (
         <ThemedText type="small" themeColor="textSecondary">
-          Planning again. This can take a minute or two.
+          {t('chat.replanning')}
         </ThemedText>
       )}
 
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
       {tooLong && (
         <ThemedText style={{ color: theme.danger }}>
-          A message can be at most {LIMITS.chatMessage} characters.
+          {t('chat.tooLong', { max: LIMITS.chatMessage })}
         </ThemedText>
       )}
       <TextField
-        placeholder="Your question"
+        placeholder={t('chat.placeholder')}
         value={text}
         onChangeText={setText}
         multiline
         editable={pending === null}
       />
       <Button
-        title="Send"
+        title={t('chat.send')}
         onPress={send}
         busy={pending !== null}
         disabled={cleanText(text) === '' || tooLong}

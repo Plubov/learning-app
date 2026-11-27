@@ -1,18 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Speech from 'expo-speech';
 
-import { pickVoice, targetSpeech } from '@/lib/speech-text';
+import { pickVoice, targetSpeech, voiceOptions, type VoiceInfo, type VoiceOption } from '@/lib/speech-text';
+
+export type { VoiceOption } from '@/lib/speech-text';
 
 /**
  * Text-to-speech with the voices built into the device or browser
- * (expo-speech). No network service and no cost; the voice quality depends on
- * the device. Android uses Google's speech engine, iOS/iPad Apple's voices,
- * the browser its own (Chrome and Edge offer Korean voices).
+ * (expo-speech). No cost; the voice quality depends on the device. Android
+ * uses Google's speech engine, iOS/iPad Apple's voices, the browser its own:
+ * Edge offers Microsoft's natural online voices, Chrome Google's.
  *
  * Which voice speaks a language: the one the learner chose on the voices
- * screen, otherwise one the app picks (see pickVoice). A device usually has
- * several voices per language, and their names do not say whether they are
- * male or female, so the choice is the learner's.
+ * screen, otherwise one the app picks (see pickVoice), a natural-sounding
+ * one where the device has one. Names do not say whether a voice is male or
+ * female, so the choice is the learner's.
  */
 
 /** Region to ask for when only the language is known. */
@@ -20,22 +22,40 @@ const LOCALES: Record<string, string> = { ko: 'ko-KR' };
 /** The language being learned is read a little slower. */
 const SLOW_RATE = 0.9;
 /**
- * The learner's own language is read slightly faster and higher, which
- * makes the built-in voices sound livelier. (Device voices have no "mood"
- * setting; speed and pitch are all that can be changed.)
+ * The learner's own language at a slightly brisker pace. Only the speed is
+ * changed: raising or lowering the pitch makes natural voices sound strained.
  */
-const LIVELY = { rate: 1.05, pitch: 1.12 };
-/** For study (university) courses: a little slower and lower, for concentrated reading. */
-const CALM = { rate: 0.93, pitch: 0.95 };
+const LIVELY = { rate: 1.05 };
+/** For study (university) courses: a little slower, for concentrated reading. */
+const CALM = { rate: 0.93 };
 
 const VOICE_KEY = (lang: string) => `speech_voice_${lang}`;
 
-export type VoiceOption = { identifier: string; name: string; enhanced: boolean };
+/** The device's voices, loaded once and loaded again when the browser reports new ones. */
+let voiceList: Promise<VoiceInfo[]> | null = null;
+const voiceListeners = new Set<() => void>();
+let watching = false;
 
-/** The device's voices, loaded once. Browsers load their list late, so an empty list is asked for again. */
-let voiceList: Promise<Speech.Voice[]> | null = null;
+/**
+ * Browsers hand over their voices in steps: first the voices installed on
+ * the computer (the robotic ones), a moment later the natural online voices,
+ * announced by a "voiceschanged" event. Without listening for it the app
+ * would keep the first, incomplete list.
+ */
+function watchVoiceChanges() {
+  if (watching) return;
+  watching = true;
+  // Only browsers have speechSynthesis; on phones this is undefined.
+  const synth = (globalThis as { speechSynthesis?: Pick<EventTarget, 'addEventListener'> })
+    .speechSynthesis;
+  synth?.addEventListener('voiceschanged', () => {
+    voiceList = null;
+    voiceListeners.forEach((listener) => listener());
+  });
+}
 
-function allVoices(): Promise<Speech.Voice[]> {
+function allVoices(): Promise<VoiceInfo[]> {
+  watchVoiceChanges();
   voiceList ??= Speech.getAvailableVoicesAsync().then(
     (voices) => {
       if (voices.length === 0) voiceList = null;
@@ -49,20 +69,18 @@ function allVoices(): Promise<Speech.Voice[]> {
   return voiceList;
 }
 
-/** The voices of one language ('ko', 'en', ...), better quality first. */
+/** Calls `listener` whenever the device's list of voices changes; returns the function that stops it. */
+export function onVoicesChanged(listener: () => void): () => void {
+  watchVoiceChanges();
+  voiceListeners.add(listener);
+  return () => {
+    voiceListeners.delete(listener);
+  };
+}
+
+/** The voices of one language ('ko', 'en', ...), natural-sounding ones first. */
 export async function voicesFor(lang: string): Promise<VoiceOption[]> {
-  const code = lang.toLowerCase();
-  return (await allVoices())
-    .filter((voice) => {
-      const language = voice.language.replace('_', '-').toLowerCase();
-      return language === code || language.startsWith(`${code}-`);
-    })
-    .map((voice) => ({
-      identifier: voice.identifier,
-      name: voice.name || voice.identifier,
-      enhanced: voice.quality === Speech.VoiceQuality.Enhanced,
-    }))
-    .sort((a, b) => Number(b.enhanced) - Number(a.enhanced) || a.name.localeCompare(b.name));
+  return voiceOptions(await allVoices(), lang);
 }
 
 /** The voice the learner chose for a language, or null for "automatic". */

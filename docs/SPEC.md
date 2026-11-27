@@ -48,7 +48,9 @@ Starting point: learner reads Hangul, knows a little basic vocabulary.
 
 Card types:
 - Recognition: Korean shown, recall the meaning.
-- Production: meaning shown, type the Korean in Hangul. On the web (a
+- Production: meaning shown, type the Korean in Hangul, or press
+  "I don't know": the answer is shown and one "Continue" records the
+  card as "Again", so it comes back later in the session. On the web (a
   computer usually has no Korean keyboard installed) Korean fields type
   Hangul from the Latin keys in the standard two-set layout (r = ㄱ, k = ㅏ)
   and show an on-screen Korean keyboard; "한 → A" switches to Latin letters.
@@ -56,7 +58,10 @@ Card types:
   layout matters: US (QWERTY) or German (QWERTZ, Z and Y swapped). Chosen
   per device, first guessed from the browser language.
   Phones and tablets use their own Korean keyboard.
-- Listening: Korean spoken by device text-to-speech, recall the meaning.
+- Listening: Korean spoken by device text-to-speech, recall the meaning,
+  then "Show answer" (Korean and meaning) and rate it, like recognition.
+  It is not typed: typing what is heard would repeat the production
+  card, which is the only flashcard with a typed answer.
   "Can't listen right now" on a listening card takes all listening cards out
   of the current session without recording anything, so they stay due and
   come back in the next session ("I can listen now" at the end of the
@@ -145,21 +150,35 @@ A lesson has two marks: learned (the guided run was finished once) and done
 (the first finished practice session). The next lesson of a course is the
 first one in order that is not done.
 
-The app has four tabs at the bottom:
+The app has four tabs at the bottom, from left to right; it opens on Home:
 
-- Today greets the learner with their total points and streak, then shows
-  today's goal (points and reviews, each with a progress bar), the next
-  step (a large card for the course worked on most recently, naming the next
-  lesson, with a button that opens that lesson directly) and today's
-  reviews.
-- Courses lists every course with its progress and next-lesson button, and
-  the word decks with their switches.
+- Stats has the statistics and the daily goals.
+- Home is for getting started quickly. It greets the learner with their
+  total points and streak, then shows today's flashcard reviews (violet) and
+  below them the next step: a large card for the course worked on most
+  recently, naming the next lesson, with a button that opens that lesson
+  directly.
+- Courses & decks (labelled "Courses" in the tab bar) lists every course
+  with its progress and next-lesson button, and the word decks with their
+  switches.
 - Focus is the study timer (see "Focus timer").
-- Stats has the statistics and the daily goals, and the settings at the
-  bottom (voices, language, signed-in account, sign out).
 
-Every other screen (a course, a lesson, the review session, the timer)
-opens above the tabs and covers the tab bar.
+Every tab has the same header: a settings button (gear) at the top left
+that opens the settings, the
+tab's title, and below them today's goal as a slim bar (points and reviews;
+the bar fills with whichever is further along; tapping it opens Stats). The
+header stays in place while the tab scrolls.
+
+Flashcards are colour coded violet wherever they are offered.
+
+Every other screen (a course, a lesson, the review session, the timer, the
+settings) opens above the tabs and covers the tab bar.
+
+Settings hold every setting of the app in one place: app language,
+reading aloud automatically (with answer sounds), voices, the computer's
+keyboard layout for Korean typing (web only) and the account with
+sign-out. Sessions keep a quick sound switch of their own; it changes
+the same setting.
 
 The course screen shows the course as a path: every lesson is a round stop
 on a winding trail, every stage a signpost, the goal at the end. Finished
@@ -226,7 +245,8 @@ letting users pick their model needs no change to screens or prompts.
 
 - Points: every answer earns points by how hard its kind of exercise is,
   and a wrong answer earns none. A matched pair 2; a multiple choice, a
-  listening choice or a flashcard that is only looked at 5; a typed answer
+  listening choice or a flashcard that is only looked at (recognition,
+  listening) 5; a typed answer
   (in practice or on a flashcard) 10; a sentence built from word tiles 15.
   A flashcard earns its points unless it is rated "Again". The values live
   in one place, the database function `event_points`.
@@ -315,7 +335,7 @@ model, and deleting a course's files when the course is deleted.
 ## Focus: active decks, priority, exams
 
 Every deck (a course's cards are in its deck) has three study settings,
-changed on the home screen (decks) or the course screen:
+changed in the "Courses & decks" tab or on the course screen:
 
 - Active or paused. The daily session and the daily goal draw from all
   active decks together. A paused deck keeps its cards and their schedule.
@@ -366,16 +386,19 @@ the timer; only time with the timer running counts.
 ## Language
 
 The app can be shown in English, German, Spanish and Korean; the choice is
-on the home screen and stored on the device (the device's language is used
+in the settings and stored on the device (the device's language is used
 until one is chosen). The app's language is sent with every AI request, and
 everything the AI writes is in it, except text in a language being learned.
-Texts are in `src/lib/i18n/`; `en.ts` is the list of all keys. Translated so
-far: home, course, lesson, and the learn and practice sessions. Still in
-English: review, statistics, decks, import, sign-in, tutor chat, material
-and homework screens, and error messages.
+Texts are in `src/lib/i18n/`; `en.ts` is the list of all keys. Every
+screen is translated, and so are the app's own error messages (AI calls,
+uploads, sign-in) and the weekday names of the statistics. Still in
+English: error messages written by the server's AI function (mostly
+technical), raw database errors, and the instructions the app sends to the
+AI (the AI answers in the app's language anyway).
 
-Voice: study courses are read in a calmer voice (slower and lower) than
-guided courses.
+Voice: study courses are read a little slower than guided courses.
+Only the speed changes, never the pitch, which makes natural voices
+sound strained.
 
 What is read aloud: explanations (lesson steps, recap) are read; translations
 of words and of example sentences are not. In a Korean course the text is
@@ -384,3 +407,14 @@ everything else the voice of the learner's language, whatever the AI
 labelled. Blanks and
 grammar marks (`__`, `~`, a leading `-`) are never read. The voice per
 language can be chosen on the voices screen.
+
+Voices: the device's own voices (no cost). When the learner has not
+picked one, the standard voice of the language is used if the device
+has it: Google's KOD (Korean), DEB (German), TPD (English) and EFF
+(Spanish), as on Android (`STANDARD_VOICES` in `speech-text.ts`).
+Otherwise natural-sounding voices are chosen. They are
+listed first and marked: "Enhanced" voices on iOS and Android, and the browser's
+online voices on the web (Microsoft's "Natural" voices in Edge,
+Google's in Chrome). Browsers announce their online voices a moment
+after the page loads, so the list is loaded again when they arrive.
+Without a natural voice the screen says where to get one.

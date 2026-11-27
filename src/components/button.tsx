@@ -8,8 +8,11 @@ type ButtonProps = {
   title: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary';
-  /** Colour of a primary button: green after a right answer, red after a wrong one. */
-  tone?: 'default' | 'success' | 'danger';
+  /**
+   * Colour of a primary button: green after a right answer, red after a
+   * wrong one, violet for flashcards.
+   */
+  tone?: 'default' | 'success' | 'danger' | 'flashcards';
   disabled?: boolean;
   /** Shows a spinner instead of the title and blocks presses. */
   busy?: boolean;

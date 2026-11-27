@@ -8,6 +8,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { cleanOptionalText, cleanText } from '@/lib/text';
+import { useT } from '@/lib/i18n';
+import type { TextKey } from '@/lib/i18n/en';
 
 export type ItemKind = 'vocab' | 'grammar';
 
@@ -28,13 +30,14 @@ type ItemFormProps = {
   clearOnSuccess?: boolean;
 };
 
-const KINDS: { value: ItemKind; label: string }[] = [
-  { value: 'vocab', label: 'Word' },
-  { value: 'grammar', label: 'Grammar' },
+const KINDS: { value: ItemKind; label: TextKey }[] = [
+  { value: 'vocab', label: 'item.word' },
+  { value: 'grammar', label: 'item.grammar' },
 ];
 
 export function ItemForm({ initial, submitTitle, onSubmit, clearOnSuccess }: ItemFormProps) {
   const theme = useTheme();
+  const { t } = useT();
   const [kind, setKind] = useState<ItemKind>(initial?.kind ?? 'vocab');
   const [term, setTerm] = useState(initial?.term ?? '');
   const [meaning, setMeaning] = useState(initial?.meaning ?? '');
@@ -58,7 +61,7 @@ export function ItemForm({ initial, submitTitle, onSubmit, clearOnSuccess }: Ite
     if (error) {
       setMessage({ kind: 'error', text: error });
     } else if (clearOnSuccess) {
-      setMessage({ kind: 'info', text: `Saved “${values.term}”.` });
+      setMessage({ kind: 'info', text: t('item.saved', { term: values.term }) });
       setTerm('');
       setMeaning('');
       setNotes('');
@@ -82,7 +85,7 @@ export function ItemForm({ initial, submitTitle, onSubmit, clearOnSuccess }: Ite
                 selected && { backgroundColor: theme.backgroundSelected },
               ]}>
               <ThemedText type="small" themeColor={selected ? 'text' : 'textSecondary'}>
-                {option.label}
+                {t(option.label)}
               </ThemedText>
             </Pressable>
           );
@@ -90,7 +93,7 @@ export function ItemForm({ initial, submitTitle, onSubmit, clearOnSuccess }: Ite
       </View>
 
       <KoreanTextField
-        label={kind === 'vocab' ? 'Korean' : 'Grammar point'}
+        label={t(kind === 'vocab' ? 'item.korean' : 'item.grammarPoint')}
         placeholder={kind === 'vocab' ? '사과' : '-아/어요'}
         value={term}
         onChangeText={setTerm}
@@ -98,14 +101,14 @@ export function ItemForm({ initial, submitTitle, onSubmit, clearOnSuccess }: Ite
         autoCorrect={false}
       />
       <TextField
-        label="Meaning"
-        placeholder={kind === 'vocab' ? 'apple' : 'polite present tense ending'}
+        label={t('item.meaning')}
+        placeholder={t(kind === 'vocab' ? 'item.meaningExample' : 'item.grammarExample')}
         value={meaning}
         onChangeText={setMeaning}
       />
       <TextField
-        label="Notes (optional)"
-        placeholder="Example sentence, usage hint"
+        label={t('item.notes')}
+        placeholder={t('item.notesPlaceholder')}
         value={notes}
         onChangeText={setNotes}
         multiline

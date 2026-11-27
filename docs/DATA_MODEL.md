@@ -214,7 +214,7 @@ delete only.
 | item_id | uuid | one row per item involved |
 | rating | smallint | 1 again, 2 hard, 3 good, 4 easy |
 | correct | boolean null | null when the answer was not checked automatically |
-| response | jsonb null | `{"type":"text","value":"..."}` or `{"type":"choice","value":"..."}` now; later `{"type":"drawing","drawing_id":"..."}` |
+| response | jsonb null | `{"type":"text","value":"..."}`, `{"type":"choice","value":"..."}` or `{"type":"dont_know"}` ("I don't know" on a typing card) now; later `{"type":"drawing","drawing_id":"..."}` |
 | duration_ms | int | |
 | reviewed_at | timestamptz | time on the device |
 | device_id | text | for sync debugging |
@@ -239,8 +239,9 @@ which kind of exercise it was, which decides the points.
 
 What an answer is worth is decided by the database function
 `event_points(card_type, exercise, rating, correct)` and nowhere else: card
-reviews not rated "again" earn 5 (recognition) or 10 (production,
-listening); correct practice answers earn 2 (match, per pair), 5 (choice,
+reviews not rated "again" earn 5 (recognition, listening) or 10
+(production); a listening review with `correct` set is from when listening
+cards were typed and keeps its 10. Correct practice answers earn 2 (match, per pair), 5 (choice,
 listen), 10 (typed) or 15 (build).
 
 The statistics screen reads its numbers from the database function

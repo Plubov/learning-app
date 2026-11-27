@@ -8,10 +8,12 @@ import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 import { cleanText } from '@/lib/text';
+import { useT } from '@/lib/i18n';
 
 export default function NewDeckScreen() {
   const theme = useTheme();
-  const [name, setName] = useState('Korean');
+  const { t } = useT();
+  const [name, setName] = useState(() => t('newDeck.defaultName'));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,12 +37,12 @@ export default function NewDeckScreen() {
 
   return (
     <Screen>
-      <TextField label="Name" value={name} onChangeText={setName} autoFocus />
+      <TextField label={t('newDeck.name')} value={name} onChangeText={setName} autoFocus />
       <ThemedText type="small" themeColor="textSecondary">
-        Language: Korean
+        {t('newDeck.language')}
       </ThemedText>
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
-      <Button title="Create deck" onPress={create} disabled={cleanText(name) === ''} busy={busy} />
+      <Button title={t('newDeck.create')} onPress={create} disabled={cleanText(name) === ''} busy={busy} />
     </Screen>
   );
 }

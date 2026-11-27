@@ -57,23 +57,23 @@ export default function DeckScreen() {
         onPress={() => router.push({ pathname: '/review', params: { deckId } })}
       />
       <Button
-        title="Add word"
+        title={t('title.addWord')}
         variant="secondary"
         onPress={() => router.push(`/decks/${deckId}/items/new`)}
       />
       <Button
-        title="Import from RemNote"
+        title={t('title.import')}
         variant="secondary"
         onPress={() => router.push(`/decks/${deckId}/import`)}
       />
 
       {shownNewPerDay !== undefined && (
         <View style={styles.setting}>
-          <ThemedText style={styles.settingLabel}>New words per day</ThemedText>
+          <ThemedText style={styles.settingLabel}>{t('deck.newPerDay')}</ThemedText>
           <Pressable
             onPress={() => changeNewPerDay(-STEP)}
             accessibilityRole="button"
-            accessibilityLabel="Fewer new words per day"
+            accessibilityLabel={t('deck.fewer')}
             style={[styles.stepper, { borderColor: theme.border }]}>
             <ThemedText>−</ThemedText>
           </Pressable>
@@ -83,7 +83,7 @@ export default function DeckScreen() {
           <Pressable
             onPress={() => changeNewPerDay(STEP)}
             accessibilityRole="button"
-            accessibilityLabel="More new words per day"
+            accessibilityLabel={t('deck.more')}
             style={[styles.stepper, { borderColor: theme.border }]}>
             <ThemedText>+</ThemedText>
           </Pressable>
@@ -92,7 +92,7 @@ export default function DeckScreen() {
       {saveError && <ThemedText style={{ color: theme.danger }}>{saveError}</ThemedText>}
 
       {deck && deck.items.length === 0 && (
-        <ThemedText themeColor="textSecondary">No words yet.</ThemedText>
+        <ThemedText themeColor="textSecondary">{t('deck.empty')}</ThemedText>
       )}
 
       {deck?.items.map((item) => (
@@ -107,7 +107,7 @@ export default function DeckScreen() {
               </View>
               {item.kind === 'grammar' && (
                 <ThemedText type="small" themeColor="textSecondary">
-                  grammar
+                  {t('item.grammar')}
                 </ThemedText>
               )}
             </ThemedView>

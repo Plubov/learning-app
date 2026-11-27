@@ -16,7 +16,9 @@ import { LIMITS } from '@/lib/course-content';
 import { splitPdf } from '@/lib/pdf-split';
 import { readFileBytes } from '@/lib/read-file-bytes';
 import { supabase } from '@/lib/supabase';
-import { extensionFor, scaledSize, UPLOAD_TYPES, uploadPath } from '@/lib/upload-path';
+import { extensionFor, scaledSize, uploadPath } from '@/lib/upload-path';
+import { getLanguage } from '@/lib/i18n';
+import { translate } from '@/lib/i18n/translate';
 
 const BUCKET = 'uploads';
 
@@ -85,7 +87,7 @@ async function preparePhoto(asset: ImagePicker.ImagePickerAsset): Promise<Picked
 export async function takePhoto(): Promise<PickedFile | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
-    throw new Error('The app may not use the camera. Allow it in the device settings.');
+    throw new Error(translate(getLanguage(), 'upload.camera'));
   }
   const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 });
   if (result.canceled || result.assets.length === 0) return null;
@@ -124,7 +126,7 @@ export async function chooseDocuments(): Promise<PickedFile[]> {
 /** Puts a file into the user's folder in Storage and returns its path there. */
 export async function uploadFile(courseId: string, file: PickedFile): Promise<string> {
   if (!extensionFor(file.mimeType)) {
-    throw new Error(`This kind of file cannot be uploaded. Allowed: ${UPLOAD_TYPES.join(', ')}.`);
+    throw new Error(translate(getLanguage(), 'upload.badType'));
   }
   const { data: auth } = await supabase.auth.getSession();
   const userId = auth.session?.user.id;
@@ -134,15 +136,15 @@ export async function uploadFile(courseId: string, file: PickedFile): Promise<st
   // Storage takes the file's bytes; on a phone they are read from its address.
   const body = await bytesOf(file);
   if (body.length < MIN_BYTES) {
-    throw new Error(`"${file.name}" could not be read from the device. Try again.`);
+    throw new Error(translate(getLanguage(), 'upload.unreadable', { name: file.name }));
   }
   if (body.length > LIMITS.uploadBytes) {
-    throw new Error(`"${file.name}" is larger than 10 MB.`);
+    throw new Error(translate(getLanguage(), 'upload.tooLarge', { name: file.name }));
   }
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, body, { contentType: file.mimeType });
-  if (error) throw new Error(`Upload failed: ${error.message}`);
+  if (error) throw new Error(translate(getLanguage(), 'upload.failed', { message: error.message }));
   return path;
 }
 

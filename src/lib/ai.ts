@@ -8,13 +8,16 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { getLanguage } from '@/lib/i18n';
+import { translate } from '@/lib/i18n/translate';
 import { supabase } from '@/lib/supabase';
 
 async function callAi(body: Record<string, unknown>): Promise<void> {
   // The app's language goes along, so everything the AI writes is in it.
   const { error } = await supabase.functions.invoke('ai', { body: { ...body, lang: getLanguage() } });
   if (!error) return;
-  let message = 'The AI service could not be reached. Check your connection and try again.';
+  const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) =>
+    translate(getLanguage(), key, values);
+  let message = t('ai.unreachable');
   if (error instanceof FunctionsHttpError) {
     // The function answers errors as {"error": "sentence for the learner"}.
     const response = error.context as Response;
@@ -23,9 +26,9 @@ async function callAi(body: Record<string, unknown>): Promise<void> {
       message = String(answer.error);
     } else if (response.status === 504 || response.status === 546) {
       // The platform stopped the function: it ran too long or used too much memory.
-      message = 'This took too long on the server and was stopped. Try again; if it is a file, use a smaller one.';
+      message = t('ai.tooLong');
     } else {
-      message = `The server answered with an error (${response.status}). Try again.`;
+      message = t('ai.serverError', { status: response.status });
     }
   }
   throw new Error(message);

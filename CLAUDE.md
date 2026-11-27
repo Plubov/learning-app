@@ -74,11 +74,21 @@ guidance (always read the versioned Expo docs, not memory).
 - Type check: `npx tsc --noEmit`
 - Lint: `npx expo lint`
 - Check dependency versions: `npx expo-doctor`
-- Publish the web version: `npm run deploy:web` (builds into `dist/` with
-  the values from `.env` and deploys to EAS Hosting as production,
-  https://learning-app-plubub.expo.app; Expo project `@plubub/learning-app`,
-  needs `npx eas-cli@latest login` once per machine). New sign-ups are
-  switched off in Supabase Auth, because the address is public.
+- Publish the web version: happens on its own after every push to `main`
+  (merged pull request) through the EAS Workflow `.eas/workflows/deploy.yml`,
+  which reads the `EXPO_PUBLIC_` values from the Expo project's "production"
+  environment variables; runs are listed on expo.dev under the project's
+  Workflows. By hand: `npm run deploy:web` (builds into `dist/` with the
+  values from `.env` and deploys to EAS Hosting as production). Either way
+  the address is https://learning-app-plubub.expo.app; Expo project
+  `@plubub/learning-app`, the CLI needs `npx eas-cli@latest login` once per
+  machine. New sign-ups are switched off in Supabase Auth, because the
+  address is public.
+- Cloud sessions (claude.ai/code, the Claude phone app): the SessionStart
+  hook in `.claude/settings.json` runs `scripts/cloud-session-setup.sh`,
+  which installs the npm packages there. Database migrations, Supabase
+  secrets and Edge Function deploys need the Supabase login and are done
+  from a computer with the CLI linked, not from cloud sessions.
 - Run unit tests: `npm test` (Jest with jest-expo; once) or `npm run test:watch`.
   Test files are `*-test.ts` in `__tests__` folders next to the code, never
   inside `src/app/` (every file there becomes a screen)

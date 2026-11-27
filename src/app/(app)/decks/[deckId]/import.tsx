@@ -18,6 +18,7 @@ import {
   type SkippedLine,
 } from '@/lib/remnote-import';
 import { supabase } from '@/lib/supabase';
+import { useT } from '@/lib/i18n';
 
 /** Largest file the sources table accepts (characters). */
 const MAX_FILE_LENGTH = 1_000_000;
@@ -40,6 +41,7 @@ type Preview = {
 export default function ImportScreen() {
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
   const theme = useTheme();
+  const { t } = useT();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [result, setResult] = useState<{ added: number; requeued: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export default function ImportScreen() {
     try {
       const text = (await readPickedFile(asset)).normalize('NFC');
       if (text.length > MAX_FILE_LENGTH) {
-        setError('This file is too large (more than one million characters).');
+        setError(t('import.tooLarge'));
         return;
       }
       const parsed = parseRemNoteMarkdown(text);
@@ -92,7 +94,7 @@ export default function ImportScreen() {
         otherSkipped: parsed.skipped.filter((s) => s.reason !== 'one-way'),
       });
     } catch (reason: unknown) {
-      setError(`Could not read the file: ${String(reason)}`);
+      setError(t('import.readError', { reason: String(reason) }));
     } finally {
       setBusy(false);
     }
@@ -120,13 +122,13 @@ export default function ImportScreen() {
   if (result !== null) {
     return (
       <Screen>
-        <ThemedText type="subtitle">Import done</ThemedText>
+        <ThemedText type="subtitle">{t('import.done')}</ThemedText>
         <ThemedText>
-          {result.added} {result.added === 1 ? 'word' : 'words'} added
-          {result.requeued > 0 && `, ${result.requeued} not yet learned put in the new order`}.
-          New words are introduced a few per day, according to the deck&apos;s daily limit.
+          {result.added === 1 ? t('import.added1') : t('import.added', { n: result.added })}
+          {result.requeued > 0 && t('import.requeued', { n: result.requeued })}
+          {t('import.afterDone')}
         </ThemedText>
-        <Button title="Back to deck" onPress={() => router.back()} />
+        <Button title={t('import.back')} onPress={() => router.back()} />
       </Screen>
     );
   }
@@ -135,8 +137,7 @@ export default function ImportScreen() {
     <Screen>
       {!preview && (
         <ThemedText themeColor="textSecondary">
-          Choose a Markdown file exported from RemNote. Two-way cards (word ↔ Korean) become
-          words in this deck. You see a preview before anything is saved.
+          {t('import.intro')}
         </ThemedText>
       )}
 
@@ -146,35 +147,33 @@ export default function ImportScreen() {
         <>
           <ThemedText type="smallBold">{preview.fileName}</ThemedText>
           <View style={styles.summary}>
-            <ThemedText>{preview.newCount} new words</ThemedText>
+            <ThemedText>{t('import.newWords', { n: preview.newCount })}</ThemedText>
             {preview.requeueCount > 0 && (
               <ThemedText themeColor="textSecondary">
-                {preview.requeueCount} already in this deck but not learned yet: they get the new
-                learning order
+                {t('import.requeue', { n: preview.requeueCount })}
               </ThemedText>
             )}
             {preview.learnedCount > 0 && (
               <ThemedText themeColor="textSecondary">
-                {preview.learnedCount} already learned (left as they are)
+                {t('import.learned', { n: preview.learnedCount })}
               </ThemedText>
             )}
             {preview.merged.length > 0 && (
               <ThemedText themeColor="textSecondary">
-                Combined meanings for: {preview.merged.join(', ')}
+                {t('import.merged', { list: preview.merged.join(', ') })}
               </ThemedText>
             )}
             {preview.oneWay > 0 && (
               <ThemedText themeColor="textSecondary">
-                {preview.oneWay} one-way cards (grammar) not imported; they stay saved with the
-                file for later
+                {t('import.oneWay', { n: preview.oneWay })}
               </ThemedText>
             )}
             {preview.otherSkipped.length > 0 && (
               <ThemedText themeColor="textSecondary">
-                {preview.otherSkipped.length} lines skipped:{' '}
+                {t('import.skipped', { n: preview.otherSkipped.length })}{' '}
                 {preview.otherSkipped
                   .slice(0, 5)
-                  .map((s) => `line ${s.line} “${s.text}”`)
+                  .map((s) => t('import.line', { n: s.line, text: s.text }))
                   .join(', ')}
                 {preview.otherSkipped.length > 5 ? ', …' : ''}
               </ThemedText>
@@ -183,7 +182,7 @@ export default function ImportScreen() {
 
           {preview.queue.length > 0 && (
             <ThemedText type="smallBold">
-              First words in learning order (topics mixed, phrases after their words)
+              {t('import.firstWords')}
             </ThemedText>
           )}
           {preview.queue.slice(0, PREVIEW_ROWS).map((item) => (
@@ -196,7 +195,7 @@ export default function ImportScreen() {
           ))}
           {preview.queue.length > PREVIEW_ROWS && (
             <ThemedText type="small" themeColor="textSecondary">
-              … and {preview.queue.length - PREVIEW_ROWS} more
+              {t('import.more', { n: preview.queue.length - PREVIEW_ROWS })}
             </ThemedText>
           )}
         </>
@@ -206,15 +205,15 @@ export default function ImportScreen() {
         <Button
           title={
             preview.newCount > 0
-              ? `Import ${preview.newCount} words`
-              : `Reorder ${preview.requeueCount} words`
+              ? t('import.importN', { n: preview.newCount })
+              : t('import.reorderN', { n: preview.requeueCount })
           }
           onPress={confirmImport}
           busy={busy}
         />
       )}
       <Button
-        title={preview ? 'Choose another file' : 'Choose file'}
+        title={t(preview ? 'import.chooseAnother' : 'import.choose')}
         variant={preview ? 'secondary' : 'primary'}
         onPress={chooseFile}
         busy={busy && !preview}

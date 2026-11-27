@@ -50,4 +50,10 @@ describe('weekdayLabel', () => {
     expect(weekdayLabel('2026-11-13')).toBe('Fr');
     expect(weekdayLabel('2026-11-15')).toBe('Su');
   });
+
+  test('names the weekday in the app language', () => {
+    expect(weekdayLabel('2026-11-17', 'de')).toBe('Di');
+    expect(weekdayLabel('2026-11-13', 'ko')).toBe('금');
+    expect(weekdayLabel('2026-11-15', 'es')).toBe('do');
+  });
 });

@@ -4,7 +4,7 @@ import { Animated, Platform, Pressable, StyleSheet, Vibration } from 'react-nati
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { streakLabel } from '@/lib/streak';
+import { useT } from '@/lib/i18n';
 
 /** How long the message stays before it fades out by itself. */
 const SHOW_MS = 2200;
@@ -28,6 +28,7 @@ type Props = {
  * Tapping closes it early. The focus timer uses it with its own texts.
  */
 export function GoalCelebration({ streak, onDone, icon = '🔥', title, detail }: Props) {
+  const { t } = useT();
   // Created once per celebration; the animation changes them, React never does.
   const [opacity] = useState(() => new Animated.Value(0));
   const [scale] = useState(() => new Animated.Value(0.4));
@@ -56,14 +57,14 @@ export function GoalCelebration({ streak, onDone, icon = '🔥', title, detail }
         style={styles.fill}
         onPress={onDone}
         accessibilityRole="button"
-        accessibilityLabel={`${title ?? 'Daily goal reached'}. Close`}>
+        accessibilityLabel={t('goal.close', { title: title ?? t('goal.reached') })}>
         <ThemedView type="backgroundElement" style={styles.box}>
           <Animated.Text style={[styles.flame, { transform: [{ scale }] }]}>{icon}</Animated.Text>
           <ThemedText type="subtitle" style={styles.center}>
-            {title ?? 'Daily goal reached!'}
+            {title ?? t('goal.reached')}
           </ThemedText>
           <ThemedText style={styles.center} themeColor="textSecondary">
-            {detail ?? (streak === null ? ' ' : streakLabel(streak))}
+            {detail ?? (streak === null ? ' ' : t('goal.streak', { n: streak }))}
           </ThemedText>
         </ThemedView>
       </Pressable>

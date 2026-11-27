@@ -3,6 +3,7 @@
  * pure helpers for showing its numbers (no database or device access here,
  * so they can be unit tested).
  */
+import type { AppLanguage } from '@/lib/i18n/translate';
 
 export type DayStats = { date: string; reviews: number; again: number };
 
@@ -46,12 +47,18 @@ export function barHeights(values: readonly number[], maxHeight: number, minHeig
   );
 }
 
-const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+/** Short weekday names per app language, Sunday first (as Date.getDay counts). */
+const WEEKDAYS: Record<AppLanguage, readonly string[]> = {
+  en: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+  de: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
+  es: ['do', 'lu', 'ma', 'mi', 'ju', 'vi', 'sá'],
+  ko: ['일', '월', '화', '수', '목', '금', '토'],
+};
 
-/** Short weekday label for a date in "YYYY-MM-DD" form, e.g. "Fr". */
-export function weekdayLabel(isoDate: string): string {
+/** Short weekday label for a date in "YYYY-MM-DD" form, e.g. "Fr" (German "Fr", Korean "금"). */
+export function weekdayLabel(isoDate: string, language: AppLanguage = 'en'): string {
   const [year, month, day] = isoDate.split('-').map(Number);
   // Built from the parts (not new Date(isoDate), which means UTC midnight)
   // so the weekday is the same in every time zone.
-  return WEEKDAYS[new Date(year, month - 1, day).getDay()];
+  return WEEKDAYS[language][new Date(year, month - 1, day).getDay()];
 }
