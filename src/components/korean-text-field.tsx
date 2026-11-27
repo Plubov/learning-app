@@ -13,6 +13,7 @@ import {
   LAYOUT_NAMES,
   type KeyboardLayout,
 } from '@/lib/hangul';
+import { useT } from '@/lib/i18n';
 import { getKeyboardLayout, setKeyboardLayout } from '@/lib/keyboard-layout';
 
 type Props = Omit<TextFieldProps, 'value' | 'onChangeText' | 'ref'> & {
@@ -30,6 +31,7 @@ const LAYOUTS = Object.keys(LAYOUT_NAMES) as KeyboardLayout[];
  * field: their own keyboard has Korean.
  */
 export function KoreanTextField({ value, onChangeText, ...rest }: Props) {
+  const { t } = useT();
   const [korean, setKorean] = useState(true);
   const [layout, setLayout] = useState<KeyboardLayout>('qwerty');
   const inputRef = useRef<TextInputInstance>(null);
@@ -68,8 +70,8 @@ export function KoreanTextField({ value, onChangeText, ...rest }: Props) {
       <View style={styles.modeRow}>
         <ThemedText type="small" themeColor="textSecondary" style={styles.modeHint}>
           {korean
-            ? `Your keys type Korean (r = ㄱ, ${layout === 'qwertz' ? 'z' : 'y'} = ${jamoForKey('y')})`
-            : 'Your keys type Latin letters'}
+            ? t('kbd.koreanKeys', { key: layout === 'qwertz' ? 'z' : 'y', jamo: jamoForKey('y') ?? '' })
+            : t('kbd.latinKeys')}
         </ThemedText>
         <Pressable
           onPress={() => {
@@ -78,7 +80,7 @@ export function KoreanTextField({ value, onChangeText, ...rest }: Props) {
           }}
           accessibilityRole="switch"
           accessibilityState={{ checked: korean }}
-          accessibilityLabel="Korean typing"
+          accessibilityLabel={t('kbd.koreanTyping')}
           hitSlop={Spacing.two}>
           <ThemedText type="smallBold">{korean ? '한 → A' : 'A → 한'}</ThemedText>
         </Pressable>
@@ -94,11 +96,11 @@ export function KoreanTextField({ value, onChangeText, ...rest }: Props) {
           <Pressable
             onPress={nextLayout}
             accessibilityRole="button"
-            accessibilityLabel={`Keyboard layout: ${LAYOUT_NAMES[layout]}. Change`}
+            accessibilityLabel={t('kbd.layout', { name: t(`kbd.${layout}`) })}
             hitSlop={Spacing.two}
             style={styles.layoutButton}>
             <ThemedText type="small" themeColor="textSecondary">
-              Your keyboard: {LAYOUT_NAMES[layout]} · change
+              {t('kbd.layout', { name: t(`kbd.${layout}`) })}
             </ThemedText>
           </Pressable>
         </>

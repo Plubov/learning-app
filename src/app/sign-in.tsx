@@ -9,11 +9,13 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
+import { useT } from '@/lib/i18n';
 
 type Message = { kind: 'error' | 'info'; text: string };
 
 export default function SignInScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,10 @@ export default function SignInScreen() {
     setBusy(false);
     // On success the session changes and the root layout switches screens.
     if (error) {
-      setMessage({ kind: 'error', text: error.message });
+      setMessage({
+        kind: 'error',
+        text: error.code === 'invalid_credentials' ? t('signIn.invalid') : error.message,
+      });
     }
   }
 
@@ -39,12 +44,15 @@ export default function SignInScreen() {
     const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
     setBusy(false);
     if (error) {
-      setMessage({ kind: 'error', text: error.message });
+      setMessage({
+        kind: 'error',
+        text: error.code === 'signup_disabled' ? t('signIn.signupDisabled') : error.message,
+      });
     } else if (!data.session) {
       // Supabase requires email confirmation by default: no session until then.
       setMessage({
         kind: 'info',
-        text: 'Account created. Open the confirmation link in your email, then sign in here.',
+        text: t('signIn.created'),
       });
     }
   }
@@ -58,7 +66,7 @@ export default function SignInScreen() {
           <ThemedText type="subtitle">Learning App</ThemedText>
 
           <TextField
-            placeholder="Email"
+            placeholder={t('signIn.email')}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -67,7 +75,7 @@ export default function SignInScreen() {
             inputMode="email"
           />
           <TextField
-            placeholder="Password"
+            placeholder={t('signIn.password')}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -84,9 +92,9 @@ export default function SignInScreen() {
             </ThemedText>
           )}
 
-          <Button title="Sign in" onPress={signIn} disabled={!canSubmit} busy={busy} />
+          <Button title={t('signIn.submit')} onPress={signIn} disabled={!canSubmit} busy={busy} />
           <Button
-            title="Create account"
+            title={t('signIn.create')}
             variant="secondary"
             onPress={signUp}
             disabled={!canSubmit}

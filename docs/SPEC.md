@@ -389,11 +389,12 @@ The app can be shown in English, German, Spanish and Korean; the choice is
 in the settings and stored on the device (the device's language is used
 until one is chosen). The app's language is sent with every AI request, and
 everything the AI writes is in it, except text in a language being learned.
-Texts are in `src/lib/i18n/`; `en.ts` is the list of all keys. Translated so
-far: home, the tabs, settings, focus timer, course, lesson, and the learn
-and practice sessions. Still in
-English: review, statistics, decks, import, sign-in, tutor chat, material
-and homework screens, and error messages.
+Texts are in `src/lib/i18n/`; `en.ts` is the list of all keys. Every
+screen is translated, and so are the app's own error messages (AI calls,
+uploads, sign-in) and the weekday names of the statistics. Still in
+English: error messages written by the server's AI function (mostly
+technical), raw database errors, and the instructions the app sends to the
+AI (the AI answers in the app's language anyway).
 
 Voice: study courses are read a little slower than guided courses.
 Only the speed changes, never the pitch, which makes natural voices

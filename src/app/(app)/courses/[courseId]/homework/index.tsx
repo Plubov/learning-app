@@ -10,11 +10,13 @@ import { Spacing } from '@/constants/theme';
 import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
 import { loadHomeworkList, verdictLabel } from '@/lib/study';
+import { useT } from '@/lib/i18n';
 
 /** The homework of a study course: every solution that was scanned, newest first. */
 export default function HomeworkListScreen() {
   const { courseId } = useLocalSearchParams<{ courseId: string }>();
   const theme = useTheme();
+  const { t } = useT();
   const load = useCallback(
     () =>
       loadHomeworkList(courseId).then(
@@ -28,18 +30,17 @@ export default function HomeworkListScreen() {
   return (
     <Screen>
       <ThemedText themeColor="textSecondary">
-        Solve a task on paper, photograph it, and get it read and checked step by step. Stuck
-        halfway? Ask for a hint instead of the solution.
+        {t('homework.intro')}
       </ThemedText>
       <Button
-        title="📷 Check a new solution"
+        title={t('homework.checkNew')}
         onPress={() => router.push(`/courses/${courseId}/homework/new`)}
       />
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
 
       {list?.length === 0 && (
         <ThemedText themeColor="textSecondary" style={styles.empty}>
-          📭 No homework yet.
+          {t('homework.empty')}
         </ThemedText>
       )}
 
@@ -53,10 +54,10 @@ export default function HomeworkListScreen() {
                 <ThemedText style={styles.icon}>{label?.icon ?? '⏳'}</ThemedText>
                 <View style={styles.grow}>
                   <ThemedText style={styles.title} numberOfLines={2}>
-                    {homework.task ?? 'Task from a photo'}
+                    {homework.task ?? t('homework.fromPhoto')}
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {label ? label.title : 'Not checked yet'} ·{' '}
+                    {label ? t(label.title) : t('homework.notChecked')} ·{' '}
                     {new Date(homework.createdAt).toLocaleDateString()}
                   </ThemedText>
                 </View>

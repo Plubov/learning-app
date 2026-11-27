@@ -12,6 +12,7 @@ import { planCourse } from '@/lib/ai';
 import { LIMITS } from '@/lib/course-content';
 import { supabase } from '@/lib/supabase';
 import { cleanOptionalText, cleanText } from '@/lib/text';
+import { useT } from '@/lib/i18n';
 
 /** A whole number from the field within [min, max], or null when it is empty or not one. */
 function wholeNumber(value: string, min: number, max: number): number | null {
@@ -22,6 +23,7 @@ function wholeNumber(value: string, min: number, max: number): number | null {
 
 export default function NewCourseScreen() {
   const theme = useTheme();
+  const { t } = useT();
   // 'study' = a university course: material is uploaded first, then planned.
   const [kind, setKind] = useState<'guided' | 'study'>('guided');
   const [goal, setGoal] = useState('');
@@ -39,11 +41,11 @@ export default function NewCourseScreen() {
   const weeksWanted = weeks.trim() === '' ? null : wholeNumber(weeks, 1, 104);
   const materialText = cleanText(material);
   let problem: string | null = null;
-  if (cleanText(goal).length > LIMITS.goal) problem = `The goal can be at most ${LIMITS.goal} characters.`;
-  else if (minutesPerDay === null) problem = 'Minutes per day must be a number from 5 to 480.';
-  else if (weeks.trim() !== '' && weeksWanted === null) problem = 'Weeks must be a number from 1 to 104, or empty.';
+  if (cleanText(goal).length > LIMITS.goal) problem = t('newCourse.goalTooLong', { max: LIMITS.goal });
+  else if (minutesPerDay === null) problem = t('newCourse.minutesInvalid');
+  else if (weeks.trim() !== '' && weeksWanted === null) problem = t('newCourse.weeksInvalid');
   else if (materialText.length > LIMITS.material) {
-    problem = `The material is ${materialText.length} characters long; at most ${LIMITS.material} fit. Paste the most important part.`;
+    problem = t('newCourse.materialTooLong', { n: materialText.length, max: LIMITS.material });
   }
 
   async function createCourse(): Promise<string> {
@@ -95,8 +97,8 @@ export default function NewCourseScreen() {
       <View style={styles.kinds}>
         {(
           [
-            { value: 'guided', icon: '🧭', title: 'Guided course', text: 'A plan from your goal' },
-            { value: 'study', icon: '🎓', title: 'University course', text: 'From your scripts, sheets and notes' },
+            { value: 'guided', icon: '🧭', title: 'newCourse.guided', text: 'newCourse.guidedText' },
+            { value: 'study', icon: '🎓', title: 'newCourse.study', text: 'newCourse.studyText' },
           ] as const
         ).map((option) => (
           <Pressable
@@ -113,20 +115,16 @@ export default function NewCourseScreen() {
               },
             ]}>
             <ThemedText style={styles.kindIcon}>{option.icon}</ThemedText>
-            <ThemedText type="smallBold">{option.title}</ThemedText>
+            <ThemedText type="smallBold">{t(option.title)}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-              {option.text}
+              {t(option.text)}
             </ThemedText>
           </Pressable>
         ))}
       </View>
       <TextField
-        label={kind === 'study' ? 'Which course, and what do you need from it?' : 'What do you want to learn?'}
-        placeholder={
-          kind === 'study'
-            ? 'e.g. Analysis 2: pass the exam in February with a good grade'
-            : 'e.g. Hold a simple conversation in Korean on a trip next spring'
-        }
+        label={t(kind === 'study' ? 'newCourse.goalStudy' : 'newCourse.goalGuided')}
+        placeholder={t(kind === 'study' ? 'newCourse.goalStudyExample' : 'newCourse.goalGuidedExample')}
         value={goal}
         onChangeText={setGoal}
         editable={!locked}
@@ -134,22 +132,22 @@ export default function NewCourseScreen() {
         autoFocus
       />
       <TextField
-        label="What do you already know? (optional)"
-        placeholder="e.g. I can read Hangul and know about 100 words"
+        label={t('newCourse.level')}
+        placeholder={t('newCourse.levelExample')}
         value={level}
         onChangeText={setLevel}
         editable={!locked}
         multiline
       />
       <TextField
-        label="Minutes per day"
+        label={t('newCourse.minutes')}
         value={minutes}
         onChangeText={setMinutes}
         editable={!locked}
         keyboardType="number-pad"
       />
       <TextField
-        label="Weeks (optional; leave empty to let the plan decide)"
+        label={t('newCourse.weeks')}
         value={weeks}
         onChangeText={setWeeks}
         editable={!locked}
@@ -157,13 +155,12 @@ export default function NewCourseScreen() {
       />
       {kind === 'study' && (
         <ThemedText type="small" themeColor="textSecondary">
-          Files (PDFs, scans of your notes, exercise sheets) are added in the next step. You can
-          also paste text here.
+          {t('newCourse.filesNext')}
         </ThemedText>
       )}
       <TextField
-        label="Course material (optional)"
-        placeholder="Paste a syllabus, notes, a table of contents or a video transcript"
+        label={t('newCourse.material')}
+        placeholder={t('newCourse.materialPlaceholder')}
         value={material}
         onChangeText={setMaterial}
         editable={!locked}
@@ -172,7 +169,7 @@ export default function NewCourseScreen() {
       />
       {materialText !== '' && (
         <ThemedText type="small" themeColor="textSecondary">
-          {materialText.length} of {LIMITS.material} characters
+          {t('newCourse.chars', { n: materialText.length, max: LIMITS.material })}
         </ThemedText>
       )}
 
@@ -181,11 +178,11 @@ export default function NewCourseScreen() {
       )}
       {busy && (
         <ThemedText type="small" themeColor="textSecondary">
-          Planning your course. This happens once and can take a minute or two.
+          {t('newCourse.planning')}
         </ThemedText>
       )}
       <Button
-        title={courseId ? 'Try again' : kind === 'study' ? 'Next: add material' : 'Create my plan'}
+        title={t(courseId ? 'newCourse.tryAgain' : kind === 'study' ? 'newCourse.nextMaterial' : 'newCourse.create')}
         onPress={submit}
         disabled={cleanText(goal) === '' || problem !== null}
         busy={busy}

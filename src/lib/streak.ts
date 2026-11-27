@@ -65,8 +65,3 @@ export function dayProgress(
 ): number {
   return Math.max(goalProgress(reviews, goal), goalProgress(points, pointsGoal));
 }
-
-/** "1-day streak", "5-day streak". */
-export function streakLabel(days: number): string {
-  return `${days}-day streak`;
-}

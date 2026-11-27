@@ -25,9 +25,9 @@ import {
   weekdayLabel,
   type ReviewStats,
 } from '@/lib/stats';
-import { streakLabel } from '@/lib/streak';
 import { supabase } from '@/lib/supabase';
 import { deviceTimeZone } from '@/lib/time-zone';
+import { useT } from '@/lib/i18n';
 
 const CHART_DAYS = 14;
 const CHART_HEIGHT = 120;
@@ -37,6 +37,7 @@ const POINTS_STEP = 10;
 
 export default function StatsScreen() {
   const theme = useTheme();
+  const { t, language } = useT();
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc('review_stats', {
       p_time_zone: deviceTimeZone(),
@@ -69,7 +70,7 @@ export default function StatsScreen() {
   if (loading || !stats) {
     return (
       <Screen>
-        <ThemedText themeColor="textSecondary">Loading…</ThemedText>
+        <ThemedText themeColor="textSecondary">{t('common.loading')}</ThemedText>
       </Screen>
     );
   }
@@ -88,18 +89,18 @@ export default function StatsScreen() {
     <Screen>
       {goalStatus && <DailyGoal status={goalStatus} />}
 
-      <ThemedText type="smallBold">Today</ThemedText>
+      <ThemedText type="smallBold">{t('stats.today')}</ThemedText>
       <View style={styles.tiles}>
-        <Tile value={today.reviews} label="reviews" />
-        <Tile value={today.new_items} label="new words" />
+        <Tile value={today.reviews} label={t('stats.reviews')} />
+        <Tile value={today.new_items} label={t('stats.newWords')} />
         <Tile
           value={todayRemembered === null ? '–' : `${todayRemembered}%`}
-          label="remembered"
+          label={t('stats.remembered')}
         />
-        <Tile value={formatDuration(today.duration_ms)} label="studied" />
+        <Tile value={formatDuration(today.duration_ms)} label={t('stats.studied')} />
       </View>
 
-      <ThemedText type="smallBold">Last {CHART_DAYS} days</ThemedText>
+      <ThemedText type="smallBold">{t('stats.lastDays', { n: CHART_DAYS })}</ThemedText>
       <ThemedView type="backgroundElement" style={styles.chartBox}>
         <View style={[styles.chart, { height: CHART_HEIGHT + 16 }]}>
           {days.map((day, index) => (
@@ -114,32 +115,31 @@ export default function StatsScreen() {
         <View style={styles.labels}>
           {days.map((day) => (
             <ThemedText key={day.date} themeColor="textSecondary" style={styles.dayLabel}>
-              {weekdayLabel(day.date)}
+              {weekdayLabel(day.date, language)}
             </ThemedText>
           ))}
         </View>
         <ThemedText type="small" themeColor="textSecondary">
-          {periodReviews} reviews
-          {periodRemembered !== null && `, ${periodRemembered}% remembered`}
+          {t('stats.periodReviews', { n: periodReviews })}
+          {periodRemembered !== null && t('stats.periodRemembered', { p: periodRemembered })}
         </ThemedText>
       </ThemedView>
 
-      <ThemedText type="smallBold">Words</ThemedText>
+      <ThemedText type="smallBold">{t('stats.words')}</ThemedText>
       <View style={styles.tiles}>
-        <Tile value={items.known} label="known" />
-        <Tile value={items.learning} label="learning" />
-        <Tile value={items.not_started} label="not started" />
+        <Tile value={items.known} label={t('stats.known')} />
+        <Tile value={items.learning} label={t('stats.learning')} />
+        <Tile value={items.not_started} label={t('stats.notStarted')} />
       </View>
 
-      <ThemedText type="smallBold">Coming up</ThemedText>
+      <ThemedText type="smallBold">{t('stats.comingUp')}</ThemedText>
       <View style={styles.tiles}>
-        <Tile value={due.tomorrow} label="reviews tomorrow" />
-        <Tile value={due.next_7_days} label="in the next 7 days" />
+        <Tile value={due.tomorrow} label={t('stats.tomorrow')} />
+        <Tile value={due.next_7_days} label={t('stats.next7')} />
       </View>
 
       <ThemedText type="small" themeColor="textSecondary">
-        Remembered: share of answers not rated “Again”. A word is known once all its cards
-        have passed the learning steps.
+        {t('stats.explain')}
       </ThemedText>
 
     </Screen>
@@ -152,6 +152,7 @@ export default function StatsScreen() {
  */
 function DailyGoal({ status }: { status: GoalStatus }) {
   const theme = useTheme();
+  const { t } = useT();
   // The goals as last chosen on this screen; saved in the background.
   const [goal, setGoal] = useState(status.goal);
   const [pointsGoal, setPointsGoal] = useState(status.pointsGoal);
@@ -183,15 +184,15 @@ function DailyGoal({ status }: { status: GoalStatus }) {
 
   return (
     <>
-      <ThemedText type="smallBold">Daily goal</ThemedText>
+      <ThemedText type="smallBold">{t('stats.dailyGoal')}</ThemedText>
       <View style={styles.tiles}>
         <Tile
           value={status.streak > 0 ? `🔥 ${status.streak}` : '0'}
-          label={status.streak > 0 ? streakLabel(status.streak) : 'no streak yet'}
+          label={status.streak > 0 ? t('goal.streak', { n: status.streak }) : t('stats.noStreak')}
         />
-        <Tile value={status.longest} label="longest streak (days)" />
-        <Tile value={`⭐ ${status.todayPoints}`} label="points today" />
-        <Tile value={`⭐ ${status.totalPoints}`} label="points in total" />
+        <Tile value={status.longest} label={t('stats.longest')} />
+        <Tile value={`⭐ ${status.todayPoints}`} label={t('stats.pointsToday')} />
+        <Tile value={`⭐ ${status.totalPoints}`} label={t('stats.pointsTotal')} />
       </View>
       <ThemedView type="backgroundElement" style={styles.goalRow}>
         <StepButton
@@ -202,7 +203,7 @@ function DailyGoal({ status }: { status: GoalStatus }) {
         <View style={styles.goalText}>
           <ThemedText style={styles.tileValue}>{pointsGoal}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            points a day
+            {t('stats.pointsADay')}
           </ThemedText>
         </View>
         <StepButton
@@ -216,16 +217,14 @@ function DailyGoal({ status }: { status: GoalStatus }) {
         <View style={styles.goalText}>
           <ThemedText style={styles.tileValue}>{goal}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            reviews a day
+            {t('stats.reviewsADay')}
           </ThemedText>
         </View>
         <StepButton label="+" onPress={() => change(GOAL_STEP)} disabled={goal >= MAX_DAILY_GOAL} />
       </ThemedView>
       {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
       <ThemedText type="small" themeColor="textSecondary">
-        Reach one of the two goals each day to keep your streak. Points: a pair matched 2, a
-        choice or a card you only look at 5, a typed answer 10, a sentence built from tiles 15;
-        wrong answers give none. A new goal applies from today; finished days keep theirs.
+        {t('stats.goalExplain')}
       </ThemedText>
     </>
   );
@@ -233,12 +232,13 @@ function DailyGoal({ status }: { status: GoalStatus }) {
 
 function StepButton(props: { label: string; onPress: () => void; disabled: boolean }) {
   const theme = useTheme();
+  const { t } = useT();
   return (
     <Pressable
       onPress={props.onPress}
       disabled={props.disabled}
       accessibilityRole="button"
-      accessibilityLabel={props.label === '+' ? 'Raise goal' : 'Lower goal'}
+      accessibilityLabel={t(props.label === '+' ? 'stats.raise' : 'stats.lower')}
       style={({ pressed }) => [
         styles.step,
         { borderColor: theme.border },

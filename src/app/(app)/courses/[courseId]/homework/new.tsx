@@ -15,6 +15,7 @@ import { LIMITS, type HomeworkMode } from '@/lib/course-content';
 import { createHomework } from '@/lib/study';
 import { cleanText } from '@/lib/text';
 import { choosePhotos, takePhoto, type PickedFile } from '@/lib/uploads';
+import { useT } from '@/lib/i18n';
 
 /**
  * A new homework check, in three numbered steps on one page: the task, the
@@ -23,6 +24,7 @@ import { choosePhotos, takePhoto, type PickedFile } from '@/lib/uploads';
 export default function NewHomeworkScreen() {
   const { courseId } = useLocalSearchParams<{ courseId: string }>();
   const theme = useTheme();
+  const { t } = useT();
   const [task, setTask] = useState('');
   const [taskPhoto, setTaskPhoto] = useState<PickedFile | null>(null);
   const [pages, setPages] = useState<PickedFile[]>([]);
@@ -51,14 +53,12 @@ export default function NewHomeworkScreen() {
     try {
       let id = homeworkId;
       if (!id) {
-        setStatus('Uploading your photos…');
+        setStatus(t('homework.uploading'));
         id = await createHomework(courseId, { task, taskPhoto, pages, mode });
         setHomeworkId(id);
       }
       setStatus(
-        mode === 'check'
-          ? 'Reading your solution and checking every step. This takes up to a minute…'
-          : 'Reading your solution and thinking about a hint…',
+        t(mode === 'check' ? 'homework.checking' : 'homework.hinting'),
       );
       await gradeAnswer(id);
       // Replace, so "back" from the result goes to the list, not to this form.
@@ -71,9 +71,9 @@ export default function NewHomeworkScreen() {
 
   return (
     <Screen>
-      <Step number={1} title="The task">
+      <Step number={1} title={t('homework.task')}>
         <TextField
-          placeholder="Type or paste the task, or photograph it below"
+          placeholder={t('homework.taskPlaceholder')}
           value={task}
           onChangeText={setTask}
           editable={!locked}
@@ -86,7 +86,7 @@ export default function NewHomeworkScreen() {
           </View>
         ) : (
           <Button
-            title="📷 Photograph the task"
+            title={t('homework.photoTask')}
             variant="secondary"
             disabled={locked}
             onPress={() =>
@@ -99,10 +99,9 @@ export default function NewHomeworkScreen() {
         )}
       </Step>
 
-      <Step number={2} title="Your solution">
+      <Step number={2} title={t('homework.solution')}>
         <ThemedText type="small" themeColor="textSecondary">
-          One page per photo, straight from above, in good light. Up to {LIMITS.solutionPages}{' '}
-          pages, in order.
+          {t('homework.photoTips', { n: LIMITS.solutionPages })}
         </ThemedText>
         {pages.length > 0 && (
           <View style={styles.thumbRow}>
@@ -110,7 +109,7 @@ export default function NewHomeworkScreen() {
               <Thumbnail
                 key={page.uri}
                 file={page}
-                label={`Page ${i + 1}`}
+                label={t('homework.page', { n: i + 1 })}
                 onRemove={locked ? undefined : () => setPages(pages.filter((other) => other !== page))}
               />
             ))}
@@ -119,7 +118,7 @@ export default function NewHomeworkScreen() {
         <View style={styles.pair}>
           <View style={styles.grow}>
             <Button
-              title="📷 Scan a page"
+              title={t('homework.scan')}
               variant={pages.length === 0 ? 'primary' : 'secondary'}
               disabled={locked || room <= 0}
               onPress={() =>
@@ -132,7 +131,7 @@ export default function NewHomeworkScreen() {
           </View>
           <View style={styles.grow}>
             <Button
-              title="🖼️ From photos"
+              title={t('homework.fromPhotos')}
               variant="secondary"
               disabled={locked || room <= 0}
               onPress={() =>
@@ -146,7 +145,7 @@ export default function NewHomeworkScreen() {
         </View>
       </Step>
 
-      <Step number={3} title="What do you need?">
+      <Step number={3} title={t('homework.need')}>
         {status && (
           <ThemedView type="tintSoft" style={styles.note}>
             <ThemedText type="smallBold">⏳ {status}</ThemedText>
@@ -155,19 +154,19 @@ export default function NewHomeworkScreen() {
         {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
         {!hasTask || pages.length === 0 ? (
           <ThemedText type="small" themeColor="textSecondary">
-            Add the task and at least one page of your solution first.
+            {t('homework.addFirst')}
           </ThemedText>
         ) : (
           <>
             <Button
-              title={homeworkId ? 'Try again' : '✅ Check my solution'}
+              title={homeworkId ? t('newCourse.tryAgain') : t('homework.check')}
               tone="success"
               onPress={() => submit('check')}
               busy={busy}
             />
             {!homeworkId && (
               <Button
-                title="💡 I am stuck: give me a hint"
+                title={t('homework.hint')}
                 variant="secondary"
                 onPress={() => submit('hint')}
                 disabled={busy}
@@ -204,6 +203,7 @@ function Thumbnail({
   label?: string;
   onRemove?: () => void;
 }) {
+  const { t } = useT();
   return (
     <View style={styles.thumb}>
       <Image source={{ uri: file.uri }} style={styles.thumbImage} contentFit="cover" />
@@ -215,7 +215,7 @@ function Thumbnail({
       {onRemove && (
         <Pressable onPress={onRemove} accessibilityRole="button" hitSlop={Spacing.two}>
           <ThemedText type="small" themeColor="textSecondary" style={[styles.center, styles.underlined]}>
-            Remove
+            {t('homework.remove')}
           </ThemedText>
         </Pressable>
       )}

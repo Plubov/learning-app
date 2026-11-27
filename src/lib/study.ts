@@ -8,6 +8,7 @@ import type {
   HomeworkVerdict,
   SourceRole,
 } from '@/lib/course-content';
+import type { TextKey } from '@/lib/i18n/en';
 import { supabase } from '@/lib/supabase';
 import { cleanOptionalText, cleanText } from '@/lib/text';
 import { partsOf, removeUploads, uploadFile, type PickedFile } from '@/lib/uploads';
@@ -235,18 +236,18 @@ export async function deleteHomework(homeworkId: string): Promise<void> {
   await removeUploads([...(data.task_path ? [data.task_path] : []), ...data.solution_paths]);
 }
 
-/** How a verdict is shown: a symbol, a short title and whether it is good news. */
-export function verdictLabel(verdict: HomeworkVerdict): { icon: string; title: string; good: boolean } {
+/** How a verdict is shown: a symbol, a short title (text key) and whether it is good news. */
+export function verdictLabel(verdict: HomeworkVerdict): { icon: string; title: TextKey; good: boolean } {
   switch (verdict) {
     case 'correct':
-      return { icon: '🏆', title: 'Correct!', good: true };
+      return { icon: '🏆', title: 'verdict.correct', good: true };
     case 'partly':
-      return { icon: '🧩', title: 'Nearly there', good: true };
+      return { icon: '🧩', title: 'verdict.partly', good: true };
     case 'wrong':
-      return { icon: '🔁', title: 'Not yet', good: false };
+      return { icon: '🔁', title: 'verdict.wrong', good: false };
     case 'unreadable':
-      return { icon: '📷', title: 'Could not read it', good: false };
+      return { icon: '📷', title: 'verdict.unreadable', good: false };
     case 'open':
-      return { icon: '💡', title: 'Your hint', good: true };
+      return { icon: '💡', title: 'verdict.open', good: true };
   }
 }

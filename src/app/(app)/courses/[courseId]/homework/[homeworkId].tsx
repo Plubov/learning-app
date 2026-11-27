@@ -15,6 +15,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { gradeAnswer } from '@/lib/ai';
 import { playSound } from '@/lib/sounds';
 import { deleteHomework, loadHomework, verdictLabel } from '@/lib/study';
+import { useT } from '@/lib/i18n';
 
 /**
  * The result of a homework check: the verdict first, then what to fix, then
@@ -29,6 +30,7 @@ export default function HomeworkResultScreen() {
     fresh?: string;
   }>();
   const theme = useTheme();
+  const { t } = useT();
   const { sound } = useSoundSetting();
   const { scale, pop } = usePop();
   const [reload, setReload] = useState(0);
@@ -78,7 +80,7 @@ export default function HomeworkResultScreen() {
     return (
       <Screen>
         {error && <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>}
-        {loading && <ThemedText themeColor="textSecondary">Loading…</ThemedText>}
+        {loading && <ThemedText themeColor="textSecondary">{t('common.loading')}</ThemedText>}
       </Screen>
     );
   }
@@ -95,7 +97,7 @@ export default function HomeworkResultScreen() {
             <Animated.Text style={[styles.verdictIcon, { transform: [{ scale }] }]}>
               {label.icon}
             </Animated.Text>
-            <ThemedText style={[styles.verdictTitle, { color }]}>{label.title}</ThemedText>
+            <ThemedText style={[styles.verdictTitle, { color }]}>{t(label.title)}</ThemedText>
             {graded && (
               <ThemedText style={[styles.score, { color }]}>
                 {result.score}
@@ -110,9 +112,9 @@ export default function HomeworkResultScreen() {
         ) : (
           <ThemedView type="tintSoft" style={styles.verdict}>
             <ThemedText style={styles.verdictIcon}>⏳</ThemedText>
-            <ThemedText style={styles.verdictTitle}>Not checked yet</ThemedText>
+            <ThemedText style={styles.verdictTitle}>{t('homework.notChecked')}</ThemedText>
             <ThemedText style={styles.center} themeColor="textSecondary">
-              The photos are saved. The check did not finish; start it again.
+              {t('homework.notFinished')}
             </ThemedText>
           </ThemedView>
         )}
@@ -120,12 +122,12 @@ export default function HomeworkResultScreen() {
         {failure && <ThemedText style={{ color: theme.danger }}>{failure}</ThemedText>}
         {working === 'check' && (
           <ThemedText type="small" themeColor="textSecondary">
-            Reading your solution. This takes up to a minute…
+            {t('homework.reading')}
           </ThemedText>
         )}
         {!result && (
           <Button
-            title="Check now"
+            title={t('homework.checkNow')}
             busy={working === 'check'}
             onPress={() =>
               run('check', async () => {
@@ -138,21 +140,21 @@ export default function HomeworkResultScreen() {
 
         {result && result.hint !== '' && (
           <ThemedView type="tintSoft" style={styles.box}>
-            <ThemedText style={styles.boxTitle}>💡 {graded ? 'How to fix it' : 'Next step'}</ThemedText>
+            <ThemedText style={styles.boxTitle}>💡 {t(graded ? 'homework.howToFix' : 'homework.nextStep')}</ThemedText>
             <ThemedText selectable>{result.hint}</ThemedText>
           </ThemedView>
         )}
 
         {homework.task && (
           <ThemedView type="backgroundElement" style={styles.box}>
-            <ThemedText style={styles.boxTitle}>📋 Task</ThemedText>
+            <ThemedText style={styles.boxTitle}>📋 {t('homework.taskTitle')}</ThemedText>
             <ThemedText selectable>{homework.task}</ThemedText>
           </ThemedView>
         )}
 
         {result && result.steps.length > 0 && (
           <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Your solution, step by step</ThemedText>
+            <ThemedText style={styles.sectionTitle}>{t('homework.steps')}</ThemedText>
             {result.steps.map((step, i) => (
               <ThemedView
                 key={i}
@@ -178,15 +180,14 @@ export default function HomeworkResultScreen() {
           <ThemedView type="backgroundElement" style={styles.box}>
             <Pressable onPress={() => setShowRead(!showRead)} accessibilityRole="button">
               <ThemedText style={styles.boxTitle}>
-                👓 What was read from your {homework.pages === 1 ? 'photo' : `${homework.pages} photos`}{' '}
+                👓 {homework.pages === 1 ? t('homework.readOne') : t('homework.readMany', { n: homework.pages })}{' '}
                 {showRead ? '▾' : '▸'}
               </ThemedText>
             </Pressable>
             {showRead && (
               <>
                 <ThemedText type="small" themeColor="textSecondary">
-                  If a line here differs from what you wrote, the check may be off. Take a
-                  sharper photo and check again.
+                  {t('homework.readHint')}
                 </ThemedText>
                 <ThemedText type="small" selectable>
                   {homework.transcription}
@@ -197,11 +198,11 @@ export default function HomeworkResultScreen() {
         )}
 
         <Button
-          title="📷 Check another solution"
+          title={t('homework.another')}
           onPress={() => router.replace(`/courses/${courseId}/homework/new`)}
         />
         <Button
-          title="Delete this homework"
+          title={t('homework.delete')}
           variant="secondary"
           busy={working === 'delete'}
           onPress={() =>

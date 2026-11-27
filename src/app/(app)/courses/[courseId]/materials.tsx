@@ -22,14 +22,16 @@ import {
 } from '@/lib/study';
 import { cleanText } from '@/lib/text';
 import { chooseDocuments, choosePhotos, takePhoto, type PickedFile } from '@/lib/uploads';
+import { useT } from '@/lib/i18n';
+import type { TextKey } from '@/lib/i18n/en';
 
 const ROLES: SourceRole[] = ['material', 'exercises', 'notes'];
 
-const ROLE_LABELS = {
-  material: { icon: '📘', label: 'Lecture material' },
-  exercises: { icon: '🧮', label: 'Exercises' },
-  notes: { icon: '✍️', label: 'My notes' },
-} as const;
+const ROLE_LABELS: Record<SourceRole, { icon: string; label: TextKey }> = {
+  material: { icon: '📘', label: 'mat.role.material' },
+  exercises: { icon: '🧮', label: 'mat.role.exercises' },
+  notes: { icon: '✍️', label: 'mat.role.notes' },
+};
 
 /** Files read at the same time. More would run into the AI service's rate limit. */
 const READ_AT_ONCE = 2;
@@ -51,6 +53,7 @@ function message(reason: unknown): string {
 export default function MaterialsScreen() {
   const { courseId } = useLocalSearchParams<{ courseId: string }>();
   const theme = useTheme();
+  const { t } = useT();
   const [reload, setReload] = useState(0);
   const [uploading, setUploading] = useState<string | null>(null); // progress line while uploading
   const [working, setWorking] = useState<string | null>(null); // deleting or planning
@@ -128,15 +131,15 @@ export default function MaterialsScreen() {
   /** Phase one: upload everything that was picked. Phase two starts by itself. */
   async function add(pick: () => Promise<PickedFile[]>) {
     setFailure(null);
-    setUploading('Waiting for your files…');
+    setUploading(t('mat.waitingFiles'));
     let uploaded = 0;
     try {
       const files = await pick();
       for (const [i, file] of files.entries()) {
-        const which = files.length > 1 ? `file ${i + 1} of ${files.length}` : `"${file.name}"`;
-        setUploading(`Uploading ${which}…`);
+        const which = files.length > 1 ? t('mat.fileOf', { i: i + 1, n: files.length }) : `"${file.name}"`;
+        setUploading(t('mat.uploading', { which }));
         await addMaterial(courseId, file, (part, parts) => {
-          if (parts > 1) setUploading(`Uploading ${which}: part ${part} of ${parts}…`);
+          if (parts > 1) setUploading(t('mat.uploadingPart', { which, part, parts }));
         });
         uploaded += 1;
         setReload((n) => n + 1);
@@ -166,23 +169,21 @@ export default function MaterialsScreen() {
   return (
     <Screen>
       <ThemedText themeColor="textSecondary">
-        Add what your course gives you: script, slides, exercise sheets, and your own handwritten
-        notes. Pick as many files as you like; they are uploaded first and then read one after the
-        other. Text you already have can be pasted directly.
+        {t('mat.intro')}
       </ThemedText>
 
       <View style={styles.actions}>
         <AddButton
           icon="📷"
-          title="Scan a page"
+          title={t('mat.scan')}
           disabled={busy}
           onPress={() => add(async () => [await takePhoto()].filter((file) => file !== null))}
         />
-        <AddButton icon="🖼️" title="Photos" disabled={busy} onPress={() => add(() => choosePhotos(10))} />
-        <AddButton icon="📄" title="PDFs" disabled={busy} onPress={() => add(chooseDocuments)} />
+        <AddButton icon="🖼️" title={t('mat.photos')} disabled={busy} onPress={() => add(() => choosePhotos(10))} />
+        <AddButton icon="📄" title={t('mat.pdfs')} disabled={busy} onPress={() => add(chooseDocuments)} />
         <AddButton
           icon="✏️"
-          title="Text"
+          title={t('mat.text')}
           disabled={busy}
           onPress={() => setDraft(draft ? null : { title: '', text: '', role: 'material' })}
         />
@@ -190,20 +191,19 @@ export default function MaterialsScreen() {
 
       {draft && (
         <ThemedView type="backgroundElement" style={styles.card}>
-          <ThemedText style={styles.cardTitle}>✏️ Add text</ThemedText>
+          <ThemedText style={styles.cardTitle}>{t('mat.addText')}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            For text you already have, such as the script of a lesson or your typed notes. It is
-            stored as it is, at once and without AI.
+            {t('mat.addTextHint')}
           </ThemedText>
           <TextField
-            label="Title (optional)"
-            placeholder="e.g. Lecture 3: Lorentz transformations"
+            label={t('mat.titleOptional')}
+            placeholder={t('mat.titleExample')}
             value={draft.title}
             onChangeText={(title) => setDraft({ ...draft, title })}
           />
           <TextField
-            label="Text"
-            placeholder="Type or paste the text here"
+            label={t('mat.text')}
+            placeholder={t('mat.textPlaceholder')}
             value={draft.text}
             onChangeText={(text) => setDraft({ ...draft, text })}
             multiline
@@ -225,31 +225,30 @@ export default function MaterialsScreen() {
                   },
                 ]}>
                 <ThemedText type="small">
-                  {ROLE_LABELS[role].icon} {ROLE_LABELS[role].label}
+                  {ROLE_LABELS[role].icon} {t(ROLE_LABELS[role].label)}
                 </ThemedText>
               </Pressable>
             ))}
           </View>
           {cleanText(draft.text).length > LIMITS.material && (
             <ThemedText type="small" style={{ color: theme.danger }}>
-              The text is {cleanText(draft.text).length} characters long; at most {LIMITS.material}{' '}
-              fit into one entry. Split it into two.
+              {t('mat.textTooLong', { n: cleanText(draft.text).length, max: LIMITS.material })}
             </ThemedText>
           )}
           <Button
-            title="Save text"
+            title={t('mat.save')}
             disabled={
               busy || cleanText(draft.text) === '' || cleanText(draft.text).length > LIMITS.material
             }
             onPress={() =>
-              run('Saving…', async () => {
+              run(t('mat.saving'), async () => {
                 await addTextMaterial(courseId, draft);
                 setDraft(null);
                 setAdded(true);
               })
             }
           />
-          <Button title="Cancel" variant="secondary" onPress={() => setDraft(null)} />
+          <Button title={t('mat.cancel')} variant="secondary" onPress={() => setDraft(null)} />
         </ThemedView>
       )}
 
@@ -266,32 +265,35 @@ export default function MaterialsScreen() {
         <ThemedView type="tintSoft" style={styles.note}>
           <ThemedText type="smallBold">
             {reading
-              ? `📖 Reading: ${partsLeft} ${partsLeft === 1 ? 'part' : 'parts'} to go`
-              : `${unread.length} ${unread.length === 1 ? 'file is' : 'files are'} not read yet`}
+              ? partsLeft === 1
+                ? t('mat.reading1')
+                : t('mat.reading', { n: partsLeft })
+              : unread.length === 1
+                ? t('mat.unread1')
+                : t('mat.unread', { n: unread.length })}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {reading
-              ? 'About a minute per part. Keep this page open; you can add more files meanwhile. If you leave, what is read so far is kept.'
-              : 'Only files that are read are used for lessons and exercises.'}
+              ? t('mat.readingHint')
+              : t('mat.onlyRead')}
           </ThemedText>
           {!reading && (
-            <Button title="Read them now" onPress={readAll} disabled={uploading !== null} />
+            <Button title={t('mat.readNow')} onPress={readAll} disabled={uploading !== null} />
           )}
         </ThemedView>
       )}
 
       {added && !planned && !reading && unread.length === 0 && !busy && (
         <ThemedView type="successSoft" style={styles.note}>
-          <ThemedText type="smallBold">✓ Everything is read.</ThemedText>
+          <ThemedText type="smallBold">{t('mat.allRead')}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            New lessons and exercises use it from now on. If the course already has a plan, you
-            can have the lessons you have not started planned again with it.
+            {t('mat.allReadHint')}
           </ThemedText>
           <Button
-            title="Update the plan with the new material"
+            title={t('mat.replan')}
             variant="secondary"
             onPress={() =>
-              run('Planning again. This can take a minute or two…', async () => {
+              run(t('mat.replanning'), async () => {
                 await planCourse(
                   courseId,
                   'New course material was added. Plan the lessons that have not been started again so that they follow the material.',
@@ -305,7 +307,7 @@ export default function MaterialsScreen() {
 
       {materials?.length === 0 && !busy && (
         <ThemedText themeColor="textSecondary" style={styles.empty}>
-          📭 Nothing here yet. Start with the script or the first exercise sheet.
+          {t('mat.empty')}
         </ThemedText>
       )}
 
@@ -320,7 +322,7 @@ export default function MaterialsScreen() {
           // A file is not deleted while a part of it is being read.
           canDelete={!busy && !activeIds.includes(material.id)}
           onToggle={() => setOpen(open === material.id ? null : material.id)}
-          onDelete={() => run('Deleting…', () => deleteMaterial(material))}
+          onDelete={() => run(t('mat.deleting'), () => deleteMaterial(material))}
         />
       ))}
     </Screen>
@@ -377,16 +379,19 @@ function MaterialCard({
   onDelete: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useT();
   const role = material.role ? ROLE_LABELS[material.role] : null;
   const read = material.text !== null;
   const parts = material.paths.length;
 
   let status: string;
-  if (read) status = `${role?.label ?? 'Material'} · read ✓ · ${open ? 'tap to close' : 'tap to see the text'}`;
-  else if (material.legacy) status = 'Uploaded in one piece, which is too long to read. Delete it and add it again.';
-  else if (active) status = `Reading part ${material.partsRead + 1} of ${parts}…`;
-  else if (material.partsRead > 0) status = `${material.partsRead} of ${parts} parts read${queued ? ' · waiting' : ''}`;
-  else status = queued ? 'Uploaded · waiting to be read' : 'Uploaded · not read yet';
+  const roleName = role ? t(role.label) : t('mat.material');
+  if (read) status = t(open ? 'mat.readOpen' : 'mat.readClosed', { role: roleName });
+  else if (material.legacy) status = t('mat.legacy');
+  else if (active) status = t('mat.readingPart', { part: material.partsRead + 1, parts });
+  else if (material.partsRead > 0) {
+    status = t('mat.partsRead', { n: material.partsRead, parts }) + (queued ? t('mat.waiting') : '');
+  } else status = t(queued ? 'mat.uploadedWaiting' : 'mat.uploadedUnread');
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
@@ -406,7 +411,7 @@ function MaterialCard({
       {!read && !material.legacy && parts > 1 && <ProgressBar value={material.partsRead / parts} />}
       {readError && (
         <ThemedText type="small" style={{ color: theme.danger }}>
-          {readError} What is read so far is kept; use “Read them now” to continue.
+          {t('mat.readErrorKept', { error: readError })}
         </ThemedText>
       )}
       {open && material.text !== null && (
@@ -415,7 +420,7 @@ function MaterialCard({
         </ThemedText>
       )}
       {(open || material.legacy) && (
-        <Button title="Delete this file" variant="secondary" onPress={onDelete} disabled={!canDelete} />
+        <Button title={t('mat.delete')} variant="secondary" onPress={onDelete} disabled={!canDelete} />
       )}
     </ThemedView>
   );

@@ -8,10 +8,12 @@ import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
 import { describeDbError } from '@/lib/db-errors';
 import { supabase } from '@/lib/supabase';
+import { useT } from '@/lib/i18n';
 
 export default function EditItemScreen() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const theme = useTheme();
+  const { t } = useT();
 
   const load = useCallback(
     () => supabase.from('items').select('kind, term, meaning, notes').eq('id', itemId).single(),
@@ -22,7 +24,7 @@ export default function EditItemScreen() {
   async function save(values: ItemValues): Promise<string | null> {
     const { error } = await supabase.from('items').update(values).eq('id', itemId);
     if (error) {
-      return describeDbError(error, `“${values.term}” is already in this deck.`);
+      return describeDbError(error, t('item.duplicate', { term: values.term }));
     }
     router.back();
     return null;
@@ -40,7 +42,7 @@ export default function EditItemScreen() {
             meaning: item.meaning,
             notes: item.notes,
           }}
-          submitTitle="Save changes"
+          submitTitle={t('item.saveChanges')}
           onSubmit={save}
         />
       )}
