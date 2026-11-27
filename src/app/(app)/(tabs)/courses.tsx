@@ -159,9 +159,11 @@ function Section({
 function CourseCard({ course }: { course: HomeCourse }) {
   const { t } = useT();
   const next = course.next;
+  const review = course.review;
   let status = t('home.noPlan');
   if (course.planned) {
-    status = next ? t('home.next', { n: next.position, title: next.title }) : t('home.allDone');
+    if (review) status = `🔁 ${t('stop.title')}: ${t('stop.lessons', { n: review.afterPosition })}`;
+    else status = next ? t('home.next', { n: next.position, title: next.title }) : t('home.allDone');
   }
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
@@ -184,7 +186,14 @@ function CourseCard({ course }: { course: HomeCourse }) {
           </ThemedText>
         </Pressable>
       </Link>
-      {course.planned && next && (
+      {course.planned && review && (
+        <Button
+          title={`${t('stop.start')} ›`}
+          variant="secondary"
+          onPress={() => router.push(`/courses/${course.id}/review/${review.afterId}`)}
+        />
+      )}
+      {course.planned && !review && next && (
         <Button
           title={`${t(stepLabel(next.step))} ›`}
           variant="secondary"

@@ -166,6 +166,18 @@ A lesson has two marks: learned (the guided run was finished once) and done
 (the first finished practice session). The next lesson of a course is the
 first one in order that is not done.
 
+Review stops: after every third lesson the path has a review stop, which
+repeats everything learned so far (all lessons up to the stop). Its
+session is made without AI: the eight weakest items (by proficiency) get
+one exercise each, taken from the questions already written for their
+lessons (practice and drills; sentence building and gaps first), or made
+from the items when there is none (pick the meaning, by ear in language
+courses), plus one round of matching pairs. A stop can be done once its
+lessons are finished; until it is done it is the next step of the course
+(on the course screen, the home screen and the course list), before the
+next lesson, also when later lessons were done first. Its answers are
+stored like practice answers. Rules: `src/lib/review-stops.ts`.
+
 The app has four tabs at the bottom, from left to right; it opens on Home:
 
 - Stats has the statistics and the daily goals.
@@ -197,10 +209,11 @@ sign-out. Sessions keep a quick sound switch of their own; it changes
 the same setting.
 
 The course screen shows the course as a path: every lesson is a round stop
-on a winding trail, every stage a signpost, the goal at the end. Finished
-stops are green with one to three stars (from proficiency), the next one is
-larger and pulses. Above the path: progress, the button into the next
-lesson, and the course's tools.
+on a winding trail, after every third lesson a review stop (violet, 🔁),
+every stage a signpost, the goal at the end. Finished
+stops are green (lessons with one to three stars, from proficiency), the
+current one is larger and pulses. Above the path: progress, the button into
+the next step (a due review, or the next lesson), and the course's tools.
 
 A week schedule can be removed on the course screen without AI (the lessons
 and their order stay); adding one back goes through the tutor. The course screen

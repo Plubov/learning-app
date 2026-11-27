@@ -13,6 +13,7 @@ import { useFocusQuery } from '@/hooks/use-focus-query';
 import { useTheme } from '@/hooks/use-theme';
 import { planCourse } from '@/lib/ai';
 import { stepLabel } from '@/lib/course-progress';
+import { dueReview, reviewStops } from '@/lib/review-stops';
 import { loadCourseOverview, removeSchedule, updateDeck } from '@/lib/courses';
 import { daysUntil, isValidDate } from '@/lib/exam';
 import { useT } from '@/lib/i18n';
@@ -132,6 +133,11 @@ export default function CourseScreen() {
   const lessons = course.lessons;
   const done = lessons.filter((l) => l.completed).length;
   const next = lessons.find((l) => !l.completed) ?? null;
+  const reviews = reviewStops(
+    lessons.map((l) => ({ id: l.id, position: l.position, completed: l.completed, reviewed: l.reviewed })),
+  );
+  // A review that is due comes before the next lesson.
+  const due = dueReview(reviews);
   const totalWeeks = lessons.reduce((max, l) => Math.max(max, l.week), 1);
   const week = Math.min(courseWeek(course.plannedAt, new Date()), totalWeeks);
   // Lessons planned for earlier weeks that are not finished yet.
@@ -141,6 +147,7 @@ export default function CourseScreen() {
   const examValid = examText.trim() === '' || isValidDate(examText.trim());
   const examDays = deck?.examDate ? daysUntil(deck.examDate, new Date()) : null;
   const openLesson = (lessonId: string) => router.push(`/courses/${courseId}/lessons/${lessonId}`);
+  const openReview = (afterId: string) => router.push(`/courses/${courseId}/review/${afterId}`);
 
   return (
     <Screen>
@@ -167,7 +174,21 @@ export default function CourseScreen() {
             {behind > 0 ? t('course.behind', { n: behind }) : t('course.onSchedule')}
           </ThemedText>
         )}
-        {next ? (
+        {due ? (
+          <>
+            <ThemedText style={[styles.heroNext, styles.onHero]} numberOfLines={2}>
+              🔁 {t('stop.title')}: {t('stop.lessons', { n: due.afterPosition })}
+            </ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openReview(due.afterId)}
+              style={({ pressed }) => [styles.heroButton, pressed && styles.pressed]}>
+              <ThemedText style={[styles.heroButtonText, { color: theme.hero }]}>
+                {t('stop.start')} ›
+              </ThemedText>
+            </Pressable>
+          </>
+        ) : next ? (
           <>
             <ThemedText style={[styles.heroNext, styles.onHero]} numberOfLines={2}>
               {t('common.lessonTitle', { n: next.position, title: next.title })}
@@ -232,8 +253,11 @@ export default function CourseScreen() {
       <CoursePath
         stages={course.stages}
         lessons={lessons}
-        nextId={next?.id ?? null}
+        nextId={due ? null : (next?.id ?? null)}
+        reviews={reviews}
+        dueReviewId={due?.afterId ?? null}
         onOpen={(lesson) => openLesson(lesson.id)}
+        onReview={(stop) => openReview(stop.afterId)}
       />
 
       {deck && (

@@ -2,7 +2,12 @@
  * Loads courses and lessons for the screens. Only talks to the database;
  * the proficiency rules are in proficiency.ts, the AI calls in ai.ts.
  */
-import type { LessonExplanation, Stage, StoredPractice } from '@/lib/course-content';
+import type {
+  LessonExplanation,
+  Stage,
+  StoredConversation,
+  StoredPractice,
+} from '@/lib/course-content';
 import { courseProgress, type CourseProgress, type LessonProgress } from '@/lib/course-progress';
 import {
   average,
@@ -10,6 +15,7 @@ import {
   type ProficiencyCard,
   type QuizAnswer,
 } from '@/lib/proficiency';
+import type { WrittenQuestion } from '@/lib/exercises';
 import { supabase } from '@/lib/supabase';
 
 /** Cards that exist from the start of an item (listening cards unlock later). */
@@ -31,6 +37,8 @@ export type CourseLesson = {
   /** The guided run ("Learn") was finished at least once. */
   learned: boolean;
   completed: boolean;
+  /** The review stop after this lesson (if there is one) was finished. */
+  reviewed: boolean;
   /** Average proficiency of the lesson's items, 0..1; 0 before it is started. */
   proficiency: number;
 };
@@ -64,7 +72,7 @@ export async function loadCourseOverview(courseId: string): Promise<CourseOvervi
       .single(),
     supabase
       .from('lessons')
-      .select('id, position, week, stage, title, summary, prepared_at, learned_at, completed_at')
+      .select('id, position, week, stage, title, summary, prepared_at, learned_at, completed_at, review_completed_at')
       .eq('course_id', courseId)
       .order('position'),
   ]);
@@ -144,6 +152,7 @@ export async function loadCourseOverview(courseId: string): Promise<CourseOvervi
       started: l.prepared_at !== null,
       learned: l.learned_at !== null,
       completed: l.completed_at !== null,
+      reviewed: l.review_completed_at !== null,
       proficiency: byLesson[l.id] ?? 0,
     })),
   };
@@ -166,6 +175,8 @@ export type LessonDetail = {
   objectives: string[];
   explanation: LessonExplanation | null;
   practice: StoredPractice | null;
+  /** The latest conversation (language courses); null before the first. */
+  conversation: StoredConversation | null;
   started: boolean;
   /** The guided run ("Learn") was finished at least once. */
   learned: boolean;
@@ -180,7 +191,9 @@ export type LessonDetail = {
 export async function loadLessonDetail(lessonId: string): Promise<LessonDetail> {
   const lesson = await supabase
     .from('lessons')
-    .select('id, course_id, title, summary, objectives, explanation, practice, prepared_at, learned_at, completed_at')
+    .select(
+      'id, course_id, title, summary, objectives, explanation, practice, conversation, prepared_at, learned_at, completed_at',
+    )
     .eq('id', lessonId)
     .single();
   if (lesson.error) throw new Error(lesson.error.message);
@@ -232,6 +245,7 @@ export async function loadLessonDetail(lessonId: string): Promise<LessonDetail> 
     objectives: lesson.data.objectives as string[],
     explanation: lesson.data.explanation as LessonExplanation | null,
     practice: lesson.data.practice as StoredPractice | null,
+    conversation: lesson.data.conversation as StoredConversation | null,
     started: lesson.data.prepared_at !== null,
     learned: lesson.data.learned_at !== null,
     completed: lesson.data.completed_at !== null,
@@ -239,6 +253,117 @@ export async function loadLessonDetail(lessonId: string): Promise<LessonDetail> 
     study: course.data?.kind === 'study',
     items: itemRows.map(({ cards: _cards, ...item }) => ({ ...item, proficiency: scores[item.id] })),
   };
+}
+
+/** An item to review, with the lesson it belongs to. */
+export type ReviewItem = LessonItem & { lessonId: string };
+
+/** What a review stop needs: the items learned so far and the questions already written for them. */
+export type ReviewData = {
+  items: ReviewItem[];
+  /** AI-written questions of those lessons (practice and drills), with the item they are about. */
+  questions: { itemId: string; question: WrittenQuestion }[];
+  targetLang: string | null;
+  /** The language of the lessons' text (the learner's); null when unknown. */
+  lang: string | null;
+  study: boolean;
+  /** "Lessons 1 to n". */
+  upTo: number;
+  reviewed: boolean;
+};
+
+/**
+ * Loads a review stop: the items of every started lesson up to and including
+ * `afterLessonId`, with their proficiency, and the questions written for
+ * those lessons before (no AI call: the review reuses them).
+ */
+export async function loadReviewData(courseId: string, afterLessonId: string): Promise<ReviewData> {
+  const [course, lessons] = await Promise.all([
+    supabase.from('courses').select('deck_id, kind').eq('id', courseId).single(),
+    supabase
+      .from('lessons')
+      .select('id, position, explanation, practice, prepared_at, review_completed_at')
+      .eq('course_id', courseId)
+      .order('position'),
+  ]);
+  const failed = course.error ?? lessons.error;
+  if (failed) throw new Error(failed.message);
+  const courseRow = course.data;
+  if (!courseRow) throw new Error('Course not found');
+  const lessonRows = lessons.data ?? [];
+  const after = lessonRows.find((lesson) => lesson.id === afterLessonId);
+  if (!after) throw new Error('Lesson not found');
+  const covered = lessonRows.filter((lesson) => lesson.position <= after.position && lesson.prepared_at !== null);
+  const coveredIds = covered.map((lesson) => lesson.id);
+
+  const [items, answers, deck] = await Promise.all([
+    supabase
+      .from('items')
+      .select(`id, lesson_id, kind, term, meaning, notes, cards(${CARD_COLUMNS})`)
+      .in('lesson_id', coveredIds)
+      .range(0, MAX_ROWS - 1)
+      .overrideTypes<
+        (Omit<LessonItem, 'proficiency'> & { lesson_id: string; cards: CardRow[] })[],
+        { merge: false }
+      >(),
+    supabase
+      .from('review_events')
+      .select('item_id, correct, reviewed_at')
+      .in('lesson_id', coveredIds)
+      .order('reviewed_at', { ascending: false })
+      .limit(MAX_ROWS),
+    courseRow.deck_id
+      ? supabase.from('decks').select('target_lang').eq('id', courseRow.deck_id).maybeSingle()
+      : null,
+  ]);
+  const itemsFailed = items.error ?? answers.error ?? deck?.error;
+  if (itemsFailed) throw new Error(itemsFailed.message);
+
+  const itemRows = items.data ?? [];
+  const scores = proficiencyByItem(
+    itemRows.map((item) => item.id),
+    relevantCards(itemRows.flatMap((item) => item.cards)),
+    answers.data ?? [],
+    new Date(),
+  );
+
+  // The jsonb columns are written only from validated AI output.
+  const questions: ReviewData['questions'] = [];
+  for (const lesson of covered) {
+    const practice = lesson.practice as StoredPractice | null;
+    for (const { item_id, ...question } of practice?.questions ?? []) questions.push({ itemId: item_id, question });
+    const explanation = lesson.explanation as LessonExplanation | null;
+    const drills = explanation && 'steps' in explanation ? (explanation.drills ?? []) : [];
+    for (const { term, ...question } of drills) {
+      const item = itemRows.find((row) => row.lesson_id === lesson.id && row.term === term);
+      if (item) questions.push({ itemId: item.id, question });
+    }
+  }
+  const last = covered[covered.length - 1]?.explanation as LessonExplanation | null | undefined;
+
+  return {
+    items: itemRows.map(({ cards: _cards, lesson_id, ...item }) => ({
+      ...item,
+      lessonId: lesson_id,
+      proficiency: scores[item.id],
+    })),
+    questions,
+    targetLang: deck?.data?.target_lang ?? null,
+    lang: last && 'lang' in last ? last.lang : null,
+    study: courseRow.kind === 'study',
+    upTo: after.position,
+    reviewed: after.review_completed_at !== null,
+  };
+}
+
+/** Records that the review after a lesson was finished (the first time only). */
+export async function markReviewDone(afterLessonId: string): Promise<void> {
+  const { error } = await supabase
+    .from('lessons')
+    .update({ review_completed_at: new Date().toISOString() })
+    .eq('id', afterLessonId)
+    .is('review_completed_at', null);
+  if (error) throw new Error(error.message);
 }
 
 /** A course as the home screen shows it: its name and where the learner stands. */
@@ -259,7 +384,7 @@ export async function loadHomeCourses(): Promise<HomeCourse[]> {
   const { data, error } = await supabase
     .from('courses')
     .select(
-      'id, title, goal, planned_at, created_at, deck_id, lessons(id, position, title, prepared_at, learned_at, completed_at)',
+      'id, title, goal, planned_at, created_at, deck_id, lessons(id, position, title, prepared_at, learned_at, completed_at, review_completed_at)',
     )
     // Plain projects (only a name, for the focus timer) live in the Focus tab.
     .neq('kind', 'project')

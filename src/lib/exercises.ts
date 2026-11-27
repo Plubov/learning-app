@@ -172,6 +172,64 @@ export function buildExercises(
   return result;
 }
 
+/** Items a review session works on: the weakest ones learned so far. */
+export const REVIEW_ITEMS = 8;
+/** Sentence exercises first: they are what a review is for. */
+const REVIEW_ORDER: Exercise['kind'][] = ['build', 'cloze', 'choice', 'typed'];
+
+/**
+ * The exercises of a review stop, made without AI: for each of the weakest
+ * items learned so far, one question already written for it (sentence
+ * building and gaps first), or, when it has none, its meaning to pick (by
+ * ear for every second item in language courses); and one round of matching
+ * pairs in the middle.
+ */
+export function buildReviewExercises(
+  items: readonly PracticeItem[],
+  questions: readonly { itemId: string; question: WrittenQuestion }[],
+  targetLang: string | null,
+  random: () => number = Math.random,
+): Exercise[] {
+  const distinct = distinctWeakest(items);
+  const weakest = distinct.slice(0, REVIEW_ITEMS);
+  const rank = (exercise: Exercise) => REVIEW_ORDER.indexOf(exercise.kind);
+  const result: Exercise[] = [];
+  weakest.forEach((item, i) => {
+    const written = shuffled(
+      questions.filter((q) => q.itemId === item.id),
+      random,
+    )
+      .flatMap((q) => exerciseFor(q.question, item.id, targetLang, random))
+      .sort((a, b) => rank(a) - rank(b));
+    if (written[0]) {
+      result.push(written[0]);
+      return;
+    }
+    const others = distinct.filter((other) => other.id !== item.id);
+    if (others.length < OPTION_COUNT - 1) return;
+    const options = shuffled(
+      [item.meaning, ...shuffled(others, random).slice(0, OPTION_COUNT - 1).map((other) => other.meaning)],
+      random,
+    );
+    result.push(
+      targetLang && i % 2 === 1
+        ? { kind: 'listen', itemId: item.id, term: item.term, options, answer: item.meaning }
+        : { kind: 'choice', itemId: item.id, prompt: item.term, options, answer: item.meaning, translation: '', explanation: '' },
+    );
+  });
+  if (weakest.length >= MIN_MATCH_PAIRS) {
+    const pairs = weakest
+      .slice(0, MATCH_PAIRS)
+      .map((item) => ({ itemId: item.id, term: item.term, meaning: item.meaning }));
+    result.splice(Math.floor(result.length / 2), 0, {
+      kind: 'match',
+      pairs: shuffled(pairs, random),
+      meanings: shuffled(pairs.map((pair) => pair.meaning), random),
+    });
+  }
+  return result;
+}
+
 /** The key of a short word of praise; varies so it does not wear out. */
 export function praise(random: () => number = Math.random): TextKey {
   const keys: TextKey[] = ['praise.1', 'praise.2', 'praise.3', 'praise.4', 'praise.5'];

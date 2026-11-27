@@ -70,7 +70,7 @@ export default function HomeScreen() {
   } else if (today?.moreNewAvailable) reviewTitle = t('home.review.more');
 
   // The course to continue: the one worked on last that still has a lesson open.
-  const current = courses?.find((course) => course.planned && course.next) ?? null;
+  const current = courses?.find((course) => course.planned && (course.next || course.review)) ?? null;
 
   return (
     <Screen>
@@ -144,13 +144,15 @@ export default function HomeScreen() {
         )}
       </ThemedView>
 
-      {current?.next && (
+      {current && (current.review || current.next) && (
         <View style={[styles.hero, { backgroundColor: theme.hero }]}>
           <ThemedText style={[styles.heroLabel, styles.onTint]} numberOfLines={1}>
             {current.title}
           </ThemedText>
           <ThemedText style={[styles.heroTitle, styles.onTint]}>
-            {t('common.lessonTitle', { n: current.next.position, title: current.next.title })}
+            {current.review
+              ? `🔁 ${t('stop.title')}: ${t('stop.lessons', { n: current.review.afterPosition })}`
+              : current.next && t('common.lessonTitle', { n: current.next.position, title: current.next.title })}
           </ThemedText>
           <View style={styles.heroTrack}>
             <View
@@ -165,10 +167,16 @@ export default function HomeScreen() {
           </ThemedText>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push(`/courses/${current.id}/lessons/${current.next?.id}`)}
+            onPress={() =>
+              router.push(
+                current.review
+                  ? `/courses/${current.id}/review/${current.review.afterId}`
+                  : `/courses/${current.id}/lessons/${current.next?.id}`,
+              )
+            }
             style={({ pressed }) => [styles.heroButton, pressed && styles.pressed]}>
             <ThemedText style={[styles.heroButtonText, { color: theme.hero }]}>
-              {t(stepLabel(current.next.step))} ›
+              {current.review ? t('stop.start') : current.next && t(stepLabel(current.next.step))} ›
             </ThemedText>
           </Pressable>
           <Link href={`/courses/${current.id}`} asChild>

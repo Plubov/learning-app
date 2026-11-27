@@ -71,6 +71,9 @@ Project:
 - [x] Practice as a full-screen session: matching pairs, word tiles,
       listening, feedback with sound and animation, result with confetti
 - [x] Course screen as a path of stops; home screen with the next lesson
+- [x] Sentence exercises (building in both directions, gaps); lesson run
+      as a game with drills, combo and result page
+- [x] Review stops after every third lesson, made without AI
 - [x] First real course tried end to end with an API key; prompts adjusted
 - [ ] Edit or delete a course; edit the goal
 - [x] PDF upload as course material (Storage)

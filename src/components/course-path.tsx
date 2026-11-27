@@ -10,6 +10,7 @@ import { stars, stopOffset, stopState, trailDots, type StopState } from '@/lib/c
 import type { CourseLesson } from '@/lib/courses';
 import type { Stage } from '@/lib/course-content';
 import { useT } from '@/lib/i18n';
+import type { ReviewStop } from '@/lib/review-stops';
 
 /** Height of one stop's row; the trail dots are placed from it. */
 const ROW = 112;
@@ -21,34 +22,53 @@ const CURRENT_STOP = 80;
 type Props = {
   stages: Stage[];
   lessons: CourseLesson[];
-  /** The next lesson to do; null when all are done. */
+  /** The next lesson to do; null when all are done or a review comes first. */
   nextId: string | null;
+  /** The review stops, after every third lesson. */
+  reviews: ReviewStop[];
+  /** The review stop to do now (its afterId); it is then the current stop. */
+  dueReviewId: string | null;
   onOpen: (lesson: CourseLesson) => void;
+  onReview: (stop: ReviewStop) => void;
 };
+
+/** A stop on the trail: a lesson, or the review after a lesson. */
+type Entry = { kind: 'lesson'; lesson: CourseLesson } | { kind: 'review'; stop: ReviewStop };
 
 /**
  * The course as a path: every lesson is a round stop on a winding trail,
- * every stage a signpost along the way, and the goal waits at the end.
- * Finished stops are green with stars, the next one is large and pulses.
+ * after every third lesson a review stop, every stage a signpost along the
+ * way, and the goal waits at the end. Finished stops are green (lessons with
+ * stars), the current one is large and pulses.
  */
-export function CoursePath({ stages, lessons, nextId, onOpen }: Props) {
+export function CoursePath({ stages, lessons, nextId, reviews, dueReviewId, onOpen, onReview }: Props) {
   const theme = useTheme();
   const { t } = useT();
   const lastStage = stages.length - 1;
+  const reviewAfter = new Map(reviews.map((stop) => [stop.afterId, stop]));
   // A lesson kept from an older plan may point past the end of a shorter
-  // new roadmap; it is then shown in the last stage.
-  const byStage = stages.map((_, stageIndex) =>
-    lessons.filter((l) => Math.min(l.stage, lastStage) === stageIndex),
+  // new roadmap; it is then shown in the last stage. A review stop goes with
+  // the lesson it follows.
+  const byStage: Entry[][] = stages.map((_, stageIndex) =>
+    lessons
+      .filter((l) => Math.min(l.stage, lastStage) === stageIndex)
+      .flatMap((lesson): Entry[] => {
+        const stop = reviewAfter.get(lesson.id);
+        return stop ? [{ kind: 'lesson', lesson }, { kind: 'review', stop }] : [{ kind: 'lesson', lesson }];
+      }),
   );
   // Position on the trail of each stage's first stop, counted across stages.
   const firstIndex = byStage.map((_, stageIndex) =>
     byStage.slice(0, stageIndex).reduce((count, group) => count + group.length, 0),
   );
+  const total = byStage.reduce((count, group) => count + group.length, 0);
+  const allDone = lessons.length > 0 && lessons.every((l) => l.completed);
 
   return (
     <View>
       {stages.map((stage, stageIndex) => {
-        const inStage = byStage[stageIndex];
+        const entries = byStage[stageIndex];
+        const inStage = entries.flatMap((entry) => (entry.kind === 'lesson' ? [entry.lesson] : []));
         const doneInStage = inStage.filter((l) => l.completed).length;
         const stageDone = inStage.length > 0 && doneInStage === inStage.length;
         return (
@@ -73,22 +93,61 @@ export function CoursePath({ stages, lessons, nextId, onOpen }: Props) {
               </ThemedText>
             </ThemedView>
 
-            {inStage.map((lesson, indexInStage) => {
+            {entries.map((entry, indexInStage) => {
               const index = firstIndex[stageIndex] + indexInStage;
               const offset = stopOffset(index);
-              const last = index === lessons.length - 1;
+              const last = index === total - 1;
+              const placement = {
+                offset,
+                // The trail leads on to the next stop, or straight down to the goal.
+                nextOffset: last ? 0 : stopOffset(index + 1),
+                // A signpost follows the last stop of a stage; the trail
+                // pauses there instead of running across it.
+                trail: last || indexInStage < entries.length - 1,
+              };
+              if (entry.kind === 'lesson') {
+                const { lesson } = entry;
+                const state = stopState(lesson, nextId);
+                let status = '';
+                if (state === 'done') status = '⭐'.repeat(stars(lesson.proficiency));
+                else if (state === 'current') {
+                  status = t(lesson.learned ? 'path.practiseNext' : lesson.started ? 'path.continueHere' : 'path.startHere');
+                } else if (state === 'open') status = t(lesson.learned ? 'path.learned' : 'path.started');
+                return (
+                  <Stop
+                    key={lesson.id}
+                    {...placement}
+                    state={state}
+                    icon={{ done: '✓', current: '▶', open: '…', ahead: String(lesson.position) }[state]}
+                    title={lesson.title}
+                    status={status}
+                    label={t('common.lessonTitle', { n: lesson.position, title: lesson.title })}
+                    onPress={() => onOpen(lesson)}
+                  />
+                );
+              }
+              const { stop } = entry;
+              let state: StopState = 'ahead';
+              if (stop.done) state = 'done';
+              else if (stop.afterId === dueReviewId) state = 'current';
+              else if (stop.ready) state = 'open';
               return (
                 <Stop
-                  key={lesson.id}
-                  lesson={lesson}
-                  state={stopState(lesson, nextId)}
-                  offset={offset}
-                  // The trail leads on to the next stop, or straight down to the goal.
-                  nextOffset={last ? 0 : stopOffset(index + 1)}
-                  // A signpost follows the last stop of a stage; the trail
-                  // pauses there instead of running across it.
-                  trail={last || indexInStage < inStage.length - 1}
-                  onPress={() => onOpen(lesson)}
+                  key={`review-${stop.afterId}`}
+                  {...placement}
+                  state={state}
+                  review
+                  icon={state === 'done' ? '✓' : '🔁'}
+                  title={t('stop.title')}
+                  status={
+                    state === 'done'
+                      ? t('stop.reviewed')
+                      : state === 'current'
+                        ? t('stop.now')
+                        : t('stop.lessons', { n: stop.afterPosition })
+                  }
+                  label={`${t('stop.title')}: ${t('stop.lessons', { n: stop.afterPosition })}`}
+                  onPress={() => onReview(stop)}
                 />
               );
             })}
@@ -97,9 +156,9 @@ export function CoursePath({ stages, lessons, nextId, onOpen }: Props) {
       })}
 
       <View style={styles.goal}>
-        <ThemedText style={styles.goalIcon}>{nextId === null ? '🏆' : '🏁'}</ThemedText>
+        <ThemedText style={styles.goalIcon}>{allDone ? '🏆' : '🏁'}</ThemedText>
         <ThemedText type="smallBold" themeColor="textSecondary">
-          {nextId === null ? t('path.complete') : t('path.goal')}
+          {allDone ? t('path.complete') : t('path.goal')}
         </ThemedText>
       </View>
     </View>
@@ -107,26 +166,37 @@ export function CoursePath({ stages, lessons, nextId, onOpen }: Props) {
 }
 
 function Stop({
-  lesson,
   state,
+  review,
+  icon,
+  title,
+  status,
+  label,
   offset,
   nextOffset,
   trail,
   onPress,
 }: {
-  lesson: CourseLesson;
   state: StopState;
+  /** A review stop: violet, like everything that repeats what was learned. */
+  review?: boolean;
+  icon: string;
+  title: string;
+  status: string;
+  /** What a screen reader says. */
+  label: string;
   offset: number;
   nextOffset: number;
   trail: boolean;
   onPress: () => void;
 }) {
   const theme = useTheme();
-  const { t } = useT();
   const current = state === 'current';
   const size = current ? CURRENT_STOP : STOP;
+  const accent = review ? theme.flashcards : theme.tint;
+  const accentSoft = review ? theme.flashcardsSoft : theme.tintSoft;
 
-  // The next stop breathes, so the eye lands on it first.
+  // The current stop breathes, so the eye lands on it first.
   const [pulse] = useState(() => new Animated.Value(0));
   useEffect(() => {
     if (!current) return;
@@ -142,17 +212,11 @@ function Stop({
 
   const colors = {
     done: { backgroundColor: theme.success, borderColor: theme.success },
-    current: { backgroundColor: theme.tint, borderColor: theme.tint },
-    open: { backgroundColor: theme.tintSoft, borderColor: theme.tint },
-    ahead: { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+    current: { backgroundColor: accent, borderColor: accent },
+    open: { backgroundColor: accentSoft, borderColor: accent },
+    ahead: { backgroundColor: theme.backgroundElement, borderColor: review ? accent : theme.border },
   }[state];
-  const icon = { done: '✓', current: '▶', open: '…', ahead: String(lesson.position) }[state];
   const onColor = state === 'done' || current;
-  let status = '';
-  if (state === 'done') status = '⭐'.repeat(stars(lesson.proficiency));
-  else if (current) {
-    status = t(lesson.learned ? 'path.practiseNext' : lesson.started ? 'path.continueHere' : 'path.startHere');
-  } else if (state === 'open') status = t(lesson.learned ? 'path.learned' : 'path.started');
 
   // The label goes on the side with more room.
   const labelOnRight = offset <= 0;
@@ -176,7 +240,7 @@ function Stop({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`${t('common.lessonTitle', { n: lesson.position, title: lesson.title })}. ${status}`}
+        accessibilityLabel={status === '' ? label : `${label}. ${status}`}
         style={({ pressed }) => [{ transform: [{ translateX: offset * STEP }] }, pressed && styles.pressed]}>
         {current && (
           <Animated.View
@@ -186,7 +250,7 @@ function Stop({
                 width: size + 20,
                 height: size + 20,
                 borderRadius: (size + 20) / 2,
-                borderColor: theme.tint,
+                borderColor: accent,
                 opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
                 transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.15] }) }],
               },
@@ -216,12 +280,12 @@ function Stop({
           themeColor={state === 'ahead' ? 'textSecondary' : 'text'}
           numberOfLines={2}
           style={!labelOnRight && styles.right}>
-          {lesson.title}
+          {title}
         </ThemedText>
         {status !== '' && (
           <ThemedText
             type="small"
-            style={[!labelOnRight && styles.right, current && { color: theme.tint }]}
+            style={[!labelOnRight && styles.right, current && { color: accent }]}
             themeColor="textSecondary">
             {status}
           </ThemedText>

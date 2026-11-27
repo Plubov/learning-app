@@ -1,5 +1,12 @@
 import type { Question } from '../course-content';
-import { buildExercises, sentenceMatches, tilesFor, type PracticeItem } from '../exercises';
+import {
+  buildExercises,
+  buildReviewExercises,
+  filledGap,
+  sentenceMatches,
+  tilesFor,
+  type PracticeItem,
+} from '../exercises';
 
 /** Always 0: the shuffle then gives a fixed, known order. */
 const fixed = () => 0;
@@ -100,5 +107,61 @@ describe('buildExercises', () => {
   it('adds nothing of its own when the items cannot be told apart', () => {
     const same = items.slice(0, 3).map((item) => ({ ...item, meaning: 'water' }));
     expect(buildExercises([choice], same, 'ko', fixed).map((e) => e.kind)).toEqual(['choice']);
+  });
+});
+
+describe('cloze questions', () => {
+  const cloze: Question = {
+    item_id: '1',
+    kind: 'cloze',
+    prompt: '저는 ___ 마셔요.',
+    options: ['물을', '물이', '물은'],
+    answer: '물을',
+    translation: 'I drink water.',
+    explanation: '',
+  };
+
+  it('become gap exercises with their translation and all options', () => {
+    const [exercise] = buildExercises([cloze], [], 'ko', fixed);
+    expect(exercise.kind).toBe('cloze');
+    if (exercise.kind !== 'cloze') return;
+    expect(exercise.translation).toBe('I drink water.');
+    expect([...exercise.options].sort()).toEqual([...cloze.options].sort());
+  });
+
+  it('fill their gap for reading aloud', () => {
+    expect(filledGap(cloze.prompt, cloze.answer)).toBe('저는 물을 마셔요.');
+  });
+});
+
+describe('buildReviewExercises', () => {
+  const sentence: Question = {
+    item_id: '2',
+    kind: 'build',
+    prompt: 'Tea, please.',
+    options: [],
+    answer: '차 주세요',
+    explanation: '',
+  };
+  const word: Question = { ...sentence, kind: 'typed', prompt: 'tea', answer: '차' };
+
+  it('works on the weakest items, at most eight', () => {
+    const many = Array.from({ length: 12 }, (_, i) => ({ id: `i${i}`, term: `t${i}`, meaning: `m${i}`, proficiency: i / 12 }));
+    const review = buildReviewExercises(many, [], 'ko', fixed);
+    const ids = review.flatMap((e) => (e.kind === 'match' ? [] : [e.itemId]));
+    expect(ids).toHaveLength(8);
+    expect(ids).not.toContain('i11');
+  });
+
+  it('prefers a sentence written for an item over a single word', () => {
+    const review = buildReviewExercises(items, [{ itemId: '2', question: word }, { itemId: '2', question: sentence }], 'ko', fixed);
+    expect(review.find((e) => e.kind !== 'match' && e.itemId === '2')?.kind).toBe('build');
+  });
+
+  it('makes an exercise for items without questions, and one round of pairs', () => {
+    const review = buildReviewExercises(items, [], 'ko', fixed);
+    expect(review.filter((e) => e.kind === 'match')).toHaveLength(1);
+    expect(review.some((e) => e.kind === 'listen')).toBe(true);
+    expect(buildReviewExercises(items, [], null, fixed).some((e) => e.kind === 'listen')).toBe(false);
   });
 });

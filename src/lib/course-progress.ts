@@ -1,4 +1,5 @@
 import type { TextKey } from '@/lib/i18n/en';
+import { dueReview, reviewStops, type ReviewStop } from '@/lib/review-stops';
 
 /**
  * Where the learner stands in a course: which lesson is next and what there
@@ -14,6 +15,8 @@ export type LessonProgress = {
   prepared_at: string | null;
   learned_at: string | null;
   completed_at: string | null;
+  /** When the review stop after this lesson was first finished (see review-stops.ts). */
+  review_completed_at?: string | null;
 };
 
 /**
@@ -45,6 +48,8 @@ export type CourseProgress = {
   total: number;
   /** The first lesson, in course order, that is not done; null when all are. */
   next: (LessonProgress & { step: LessonStepKind }) | null;
+  /** A review stop that is due: offered before the next lesson. */
+  review: ReviewStop | null;
   /** Time of the latest thing done in the course (ms since 1970); 0 if nothing. */
   lastActivity: number;
 };
@@ -61,6 +66,16 @@ export function courseProgress(lessons: readonly LessonProgress[]): CourseProgre
     done: ordered.filter((lesson) => lesson.completed_at !== null).length,
     total: ordered.length,
     next: next ? { ...next, step: lessonStep(next) } : null,
+    review: dueReview(
+      reviewStops(
+        ordered.map((lesson) => ({
+          id: lesson.id,
+          position: lesson.position,
+          completed: lesson.completed_at !== null,
+          reviewed: (lesson.review_completed_at ?? null) !== null,
+        })),
+      ),
+    ),
     lastActivity: times.length > 0 ? Math.max(...times) : 0,
   };
 }

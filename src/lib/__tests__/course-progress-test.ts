@@ -51,7 +51,15 @@ describe('courseProgress', () => {
   it('has no next lesson when all are done, and none in an empty course', () => {
     const done = { prepared_at: T1, learned_at: T1, completed_at: T2 };
     expect(courseProgress([lesson(1, done), lesson(2, done)]).next).toBeNull();
-    expect(courseProgress([])).toEqual({ done: 0, total: 0, next: null, lastActivity: 0 });
+    expect(courseProgress([])).toEqual({ done: 0, total: 0, next: null, review: null, lastActivity: 0 });
+  });
+
+  it('offers the review after three finished lessons until it is done', () => {
+    const done = { prepared_at: T1, learned_at: T1, completed_at: T2 };
+    const four = [lesson(1, done), lesson(2, done), lesson(3, done), lesson(4)];
+    expect(courseProgress(four).review?.afterId).toBe('l3');
+    const reviewed = [...four.slice(0, 2), lesson(3, { ...done, review_completed_at: T3 }), lesson(4)];
+    expect(courseProgress(reviewed).review).toBeNull();
   });
 
   it('skips over an open lesson only when it is done', () => {
