@@ -471,3 +471,6 @@ online voices on the web (Microsoft's "Natural" voices in Edge,
 Google's in Chrome). Browsers announce their online voices a moment
 after the page loads, so the list is loaded again when they arrive.
 Without a natural voice the screen says where to get one.
+Chrome on Android offers websites only one voice per language, the one
+set in Android's text-to-speech settings (the app in Expo Go gets all of
+the phone's Google voices); there the voices screen says where to change it.

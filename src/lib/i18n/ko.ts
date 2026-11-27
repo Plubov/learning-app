@@ -180,6 +180,8 @@ export const ko: Record<TextKey, string> = {
   'tabs.stats': '통계',
   'settings.title': '설정',
   'settings.account': '계정',
+  'voices.androidWebTitle': 'Android의 Chrome에서는 휴대폰이 음성을 정해요',
+  'voices.androidWeb': '브라우저는 언어마다 휴대폰에 설정된 음성 하나만 써요. 바꾸려면 휴대폰 설정 → 시스템 → 언어 → 텍스트 음성 변환 출력에서 음성 엔진(Google 음성 서비스) 옆 톱니바퀴 → 음성 데이터 설치 → 언어를 눌러 음성을 고르세요. 그다음 이 페이지를 새로고침하세요.',
   'talk.title': '대화',
   'talk.sub': '실제 대화처럼 소리 내어 대답해요',
   'talk.writing': '대화를 만드는 중…',

@@ -180,6 +180,8 @@ export const de: Record<TextKey, string> = {
   'tabs.stats': 'Statistik',
   'settings.title': 'Einstellungen',
   'settings.account': 'Konto',
+  'voices.androidWebTitle': 'In Chrome auf Android wählt das Handy die Stimme',
+  'voices.androidWeb': 'Der Browser bietet eine Stimme pro Sprache an: die auf dem Handy eingestellte. Zum Ändern öffne die Einstellungen des Handys → System → Sprachen → Sprachausgabe, tippe auf das Zahnrad neben der Sprach-Engine (Sprachdienste von Google), dann Sprachdaten installieren → die Sprache, und wähle eine Stimme. Lade danach diese Seite neu.',
   'talk.title': 'Gespräch',
   'talk.sub': 'Antworte laut, wie in einem echten Gespräch',
   'talk.writing': 'Ein Gespräch für dich wird geschrieben…',
