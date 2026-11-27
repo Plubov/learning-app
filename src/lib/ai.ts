@@ -61,6 +61,14 @@ export function generatePractice(
   return callAi({ task: 'generate_practice', lessonId, proficiency });
 }
 
+/**
+ * Writes a new conversation for a lesson of a language course (stored in
+ * lessons.conversation): a situation and a few turns to answer by speaking.
+ */
+export function prepareConversation(lessonId: string): Promise<void> {
+  return callAi({ task: 'prepare_conversation', lessonId });
+}
+
 /** Sends one message to the course's tutor; the reply is stored in course_messages. */
 export function askTutor(courseId: string, message: string): Promise<void> {
   return callAi({ task: 'chat', courseId, message });

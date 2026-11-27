@@ -14,6 +14,7 @@ export {
   type HomeworkVerdict,
   type LessonStep,
   type SourceRole,
+  type StoredConversation,
   type StoredPractice,
 } from '../../supabase/functions/_shared/course-schemas';
 

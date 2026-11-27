@@ -1,4 +1,5 @@
 import {
+  validateConversation,
   validateCoursePlan,
   validateHomeworkCheck,
   validateMaterialReading,
@@ -312,6 +313,33 @@ describe('validatePractice', () => {
 
   it('rejects practice without questions', () => {
     expect(validatePractice({ questions: [] }, 2).ok).toBe(false);
+  });
+});
+
+describe('validateConversation', () => {
+  const turn = {
+    item: 0,
+    partner: '뭐 드릴까요?',
+    partner_translation: 'What can I get you?',
+    answers: ['물 주세요', '물 한 잔 주세요'],
+    hint: 'Ask for water.',
+  };
+  const conversation = { scenario: ' At a café ', partner: 'Barista', turns: [turn, turn, turn] };
+
+  it('accepts a conversation and cleans its text', () => {
+    const result = validateConversation(conversation, 2);
+    expect(result.ok && result.value.scenario).toBe('At a café');
+    expect(result.ok && result.value.turns).toHaveLength(3);
+  });
+
+  it.each([
+    ['too few turns', { ...conversation, turns: [turn, turn] }],
+    ['a turn without answers', { ...conversation, turns: [turn, turn, { ...turn, answers: [] }] }],
+    ['the same answer twice', { ...conversation, turns: [turn, turn, { ...turn, answers: ['물', '물'] }] }],
+    ['an item that does not exist', { ...conversation, turns: [turn, turn, { ...turn, item: 2 }] }],
+    ['a turn without a hint', { ...conversation, turns: [turn, turn, { ...turn, hint: '' }] }],
+  ])('rejects %s', (_name, value) => {
+    expect(validateConversation(value, 2).ok).toBe(false);
   });
 });
 

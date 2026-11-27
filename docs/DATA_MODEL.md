@@ -181,6 +181,9 @@ in the week.
 | practice | jsonb null | latest practice: `{"questions": [{"item_id", "kind": "choice", "typed", "build" or "cloze", "prompt", "options", "answer", "translation", "explanation"}]}`; for "build", `answer` is the sentence and `options` the extra wrong words; for "cloze", `prompt` has one gap `___`, `answer` fills it and `translation` is the whole sentence in the learner's language. `translation` is missing in practice written before 2026-11-27. Practice written before 2026-11-16 also has `examples`, which the app no longer shows |
 | practice_at | timestamptz null | |
 | completed_at | timestamptz null | first finished practice session |
+| review_completed_at | timestamptz null | first finished review of the review stop after this lesson (every third lesson has one; see `src/lib/review-stops.ts`) |
+| conversation | jsonb null | latest conversation (language courses): `{"scenario", "partner", "turns": [{"item_id", "partner", "partner_translation", "answers", "hint"}]}`; `partner` and `answers` are in the language being learned, the rest in the learner's |
+| conversation_at | timestamptz null | when the conversation was written |
 
 The jsonb shapes and their validators are defined once, in
 `supabase/functions/_shared/course-schemas.ts`, used by the Edge Function

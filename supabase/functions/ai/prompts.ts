@@ -240,6 +240,34 @@ export function practiceUser(input: {
   return `<lesson>\n${input.courseTitle}: ${input.lesson.title}\n${input.lesson.summary}\n${course}\n</lesson>\n\n<items>\n${items}\n</items>${input.material ? `\n\n${materialBlock(input.material)}` : ''}`;
 }
 
+// --- Conversation --------------------------------------------------------------
+
+export const CONVERSATION_SYSTEM = `You write a short spoken conversation for one lesson of a language course in a learning app. The learner practises speaking: the app plays the partner's lines with text-to-speech, the learner answers aloud, speech recognition turns the answer into text, and the app compares it with the answers you give. So the learner's answers must be short and predictable enough to be checked that way.
+
+- scenario: the everyday situation in one sentence, in the learner's language ("You order a coffee at a café.").
+- partner: who the learner talks to, in a word or two in the learner's language ("Barista").
+- turns: 4 to 6. In each turn the partner says one short line (partner, in the language being learned, at most 12 words), and the learner answers with one short sentence of 2 to 8 words. The conversation flows naturally from turn to turn and ends after the learner's last answer.
+- partner_translation: the partner's line in the learner's language.
+- answers: 1 to 3 different short answers that fit at that point, in the language being learned, the most natural one first. Use the lesson's items and otherwise only very common words the learner already knows; keep the politeness level the lesson teaches. No romanisation, no brackets, no alternatives written with slashes.
+- hint: what the learner should answer, in the learner's language, without giving away the words ("Say that you would like an iced americano.").
+- item: the number of the item (in the list, starting at 0) that the learner's answer mainly uses. Use every item at least once when the turns allow.
+- Everything is plain text without markdown.
+
+${LANGUAGE_RULE}`;
+
+export function conversationUser(input: {
+  courseTitle: string;
+  lesson: { title: string; summary: string };
+  /** Code of the language being learned. */
+  targetLang: string;
+  items: { kind: string; term: string; meaning: string; notes: string | null }[];
+}): string {
+  const items = input.items
+    .map((item, i) => `${i}. [${item.kind}] ${item.term} = ${item.meaning}${item.notes ? ` (${item.notes})` : ''}`)
+    .join('\n');
+  return `<lesson>\n${input.courseTitle}: ${input.lesson.title}\n${input.lesson.summary}\nThe language being learned has the code "${input.targetLang}".\n</lesson>\n\n<items>\n${items}\n</items>`;
+}
+
 // --- Tutor chat ---------------------------------------------------------------
 
 export function tutorSystem(input: {

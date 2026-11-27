@@ -119,6 +119,35 @@ export type LessonExplanation =
   | (Pick<LessonContent, 'lang' | 'steps' | 'key_points'> & { drills?: LessonDrill[] })
   | { intro: string; key_points: string[] };
 
+/**
+ * A simulated conversation for one lesson of a language course: in every
+ * turn the partner says one line and the learner answers, by speaking or
+ * typing. The app checks the answer against `answers` itself.
+ */
+export type Conversation = {
+  /** The situation, in the learner's language ("You order a coffee at a café."). */
+  scenario: string;
+  /** Who the learner talks to, in the learner's language ("Barista"). */
+  partner: string;
+  turns: {
+    /** The item the learner's answer mainly uses (list position). */
+    item: number;
+    /** What the partner says, in the language being learned. */
+    partner: string;
+    /** The same in the learner's language. */
+    partner_translation: string;
+    /** 1 to 3 short answers that fit, in the language being learned; the first is the model answer. */
+    answers: string[];
+    /** What to answer, in the learner's language, without the words themselves. */
+    hint: string;
+  }[];
+};
+
+/** A conversation as stored on the lesson: turns carry the item's id. */
+export type StoredConversation = Omit<Conversation, 'turns'> & {
+  turns: (Omit<Conversation['turns'][number], 'item'> & { item_id: string })[];
+};
+
 export type TutorReply = {
   reply: string;
   /** Instruction for the planner when the learner wants the plan changed; '' otherwise. */
@@ -220,6 +249,8 @@ export const LIMITS = {
   questions: 10,
   /** A lesson's own sentence exercises. */
   drills: 8,
+  /** Turns of a conversation. */
+  turns: 8,
   term: 120,
 } as const;
 
@@ -291,6 +322,21 @@ export const LESSON_CONTENT_SCHEMA = object({
 
 export const PRACTICE_SCHEMA = object({
   questions: { type: 'array', items: QUESTION_SCHEMA },
+});
+
+export const CONVERSATION_SCHEMA = object({
+  scenario: text,
+  partner: text,
+  turns: {
+    type: 'array',
+    items: object({
+      item: { type: 'integer' },
+      partner: text,
+      partner_translation: text,
+      answers: textList,
+      hint: text,
+    }),
+  },
 });
 
 export const TUTOR_REPLY_SCHEMA = object({ reply: text, plan_change: text });
@@ -580,6 +626,31 @@ export function validatePractice(
       validateQuestion(entry, `questions[${i}]`, itemCount, subject, QUESTION_KINDS),
     );
     return { questions };
+  });
+}
+
+/** @param itemCount number of items the turns may point at (0 … itemCount-1). */
+export function validateConversation(value: unknown, itemCount: number): Validated<Conversation> {
+  return run(() => {
+    const conversation = record(value, 'conversation');
+    const turns = list(conversation.turns, 'turns', 3, LIMITS.turns).map((entry, i) => {
+      const where = `turns[${i}]`;
+      const turn = record(entry, where);
+      const answers = strings(turn.answers, `${where}.answers`, 1, 3, 150);
+      if (new Set(answers).size !== answers.length) throw new Invalid(`${where}.answers repeats an answer`);
+      return {
+        item: int(turn.item, `${where}.item`, 0, itemCount - 1),
+        partner: str(turn.partner, `${where}.partner`, 200),
+        partner_translation: str(turn.partner_translation, `${where}.partner_translation`, 300),
+        answers,
+        hint: str(turn.hint, `${where}.hint`, 200),
+      };
+    });
+    return {
+      scenario: str(conversation.scenario, 'scenario', 300),
+      partner: str(conversation.partner, 'partner', 60),
+      turns,
+    };
   });
 }
 
